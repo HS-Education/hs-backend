@@ -47,7 +47,7 @@ public class AreaController {
 
         var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(area.get());
         return new ResponseEntity<>(areaResource, HttpStatus.CREATED);
-    }
+    } // no aprobado
 
     @GetMapping
     public ResponseEntity<List<AreaResource>> getAllAreas() {
