@@ -1,29 +1,37 @@
 package com.hs.hstesis.learning.application.internal.commandservices;
 
+import com.hs.hstesis.iam.domain.model.valueobjects.Roles;
+import com.hs.hstesis.iam.infrastructure.persistance.jpa.RoleRepository;
 import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
 import com.hs.hstesis.learning.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.model.commands.AssignAreaCoordinatorCommand;
-import com.hs.hstesis.learning.domain.model.commands.UnassignAreaCoordinatorCommand;
+import com.hs.hstesis.learning.domain.model.commands.ReassignAreaCoordinatorCommand;
 import com.hs.hstesis.learning.domain.model.entities.AreaCoordinator;
 import com.hs.hstesis.learning.domain.services.AreaCoordinatorCommandService;
 import com.hs.hstesis.learning.infrastructure.jpa.AreaCoordinatorRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.AreaRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AreaCoordinatorCommandServiceImpl implements AreaCoordinatorCommandService {
     private final AreaCoordinatorRepository areaCoordinatorRepository;
     private final UserRepository userRepository;
     private final AreaRepository areaRepository;
+    private final RoleRepository roleRepository;
 
-    public AreaCoordinatorCommandServiceImpl(AreaCoordinatorRepository areaCoordinatorRepository, UserRepository userRepository, AreaRepository areaRepository) {
+    public AreaCoordinatorCommandServiceImpl(AreaCoordinatorRepository areaCoordinatorRepository,
+                                             UserRepository userRepository,
+                                             AreaRepository areaRepository,
+                                             RoleRepository roleRepository) {
         this.areaCoordinatorRepository = areaCoordinatorRepository;
         this.userRepository = userRepository;
         this.areaRepository = areaRepository;
+        this.roleRepository = roleRepository;
     }
 
     @Override
-    public void handle(AssignAreaCoordinatorCommand command){
+    public Long handle(AssignAreaCoordinatorCommand command){
         if(areaCoordinatorRepository.existsByUserIdAndAreaId(command.userId(), command.areaId())){
             throw new UserAlreadyAssignedToAreaException(command.userId(), command.areaId());
         }
@@ -39,13 +47,40 @@ public class AreaCoordinatorCommandServiceImpl implements AreaCoordinatorCommand
 
         var coordinator = new AreaCoordinator(user, area);
         areaCoordinatorRepository.save(coordinator);
+        return coordinator.getId();
     }
 
     @Override
-    public void handle(UnassignAreaCoordinatorCommand command){
-        var coordinator = areaCoordinatorRepository.findByUserIdAndAreaId(command.userId(), command.areaId())
-                .orElseThrow(() -> new AreaCoordinatorNotFoundException(command.userId(), command.areaId()));
+    @Transactional
+    public Long handle(ReassignAreaCoordinatorCommand command) {
+        var coordinatorRole = roleRepository.findByRoleName(Roles.ROLE_COORDINATOR)
+                .orElseThrow(() -> new RoleNotFoundException(Roles.ROLE_COORDINATOR));
 
-        areaCoordinatorRepository.delete(coordinator);
+        var area = areaRepository.findById(command.areaId())
+                .orElseThrow(() -> new AreaNotFoundException(command.areaId()));
+        var newTeacher = userRepository.findById(command.newCoordinatorId())
+                .orElseThrow(() -> new UserNotFoundException(command.newCoordinatorId()));
+
+        areaCoordinatorRepository.findByAreaId(area.getId()).ifPresent(oldAssignment -> {
+            var oldTeacher = oldAssignment.getUser();
+
+            boolean coordinatesOtherAreas = areaCoordinatorRepository
+                    .existsByUserIdAndAreaIdNot(oldTeacher.getId(), area.getId());
+
+            if (!coordinatesOtherAreas) {
+                oldTeacher.removeRole(coordinatorRole);
+                userRepository.save(oldTeacher);
+            }
+
+            areaCoordinatorRepository.delete(oldAssignment);
+        });
+
+        newTeacher.addRole(coordinatorRole);
+        userRepository.save(newTeacher);
+
+        var newAssignment = new AreaCoordinator(newTeacher, area);
+        areaCoordinatorRepository.save(newAssignment);
+
+        return newAssignment.getId();
     }
 }

@@ -9,7 +9,7 @@ import java.util.Optional;
 public interface AreaCoordinatorRepository extends JpaRepository<AreaCoordinator, Long> {
     Optional<AreaCoordinator> findByUserId(Long userId);
     Optional<AreaCoordinator> findByAreaId(Long areaId);
-    Optional<AreaCoordinator> findByUserIdAndAreaId(Long userId, Long areaId);
+    boolean existsByUserIdAndAreaIdNot(Long userId, Long areaId);
     boolean existsByUserIdAndAreaId(Long userId, Long areaId);
     boolean existsByAreaId(Long areaId);
 }

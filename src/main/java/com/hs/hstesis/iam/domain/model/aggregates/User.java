@@ -43,4 +43,12 @@ public class User extends AuditableAbstractAggregateRoot<User> {
         this.passwordHash = command.passwordHash();
         this.isActive = true;
     }
+
+    public void addRole(Role role) {
+        this.roles.add(role);
+    }
+
+    public void removeRole(Role role) {
+        this.roles.remove(role);
+    }
 }

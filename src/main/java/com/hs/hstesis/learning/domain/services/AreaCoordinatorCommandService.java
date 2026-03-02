@@ -1,9 +1,9 @@
 package com.hs.hstesis.learning.domain.services;
 
 import com.hs.hstesis.learning.domain.model.commands.AssignAreaCoordinatorCommand;
-import com.hs.hstesis.learning.domain.model.commands.UnassignAreaCoordinatorCommand;
+import com.hs.hstesis.learning.domain.model.commands.ReassignAreaCoordinatorCommand;
 
 public interface AreaCoordinatorCommandService {
-    void handle(AssignAreaCoordinatorCommand command);
-    void handle(UnassignAreaCoordinatorCommand command);
+    Long handle(AssignAreaCoordinatorCommand command);
+    Long handle(ReassignAreaCoordinatorCommand command);
 }

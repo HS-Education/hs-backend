@@ -25,12 +25,13 @@ public class AcademicYearCommandServiceImpl implements AcademicYearCommandServic
     }
 
     @Override
-    public void handle(CreateAcademicYearCommand command){
+    public Long handle(CreateAcademicYearCommand command){
         if(academicYearRepository.existsByYear(command.year())){
             throw new AcademicYearAlreadyExistsException(command.year());
         }
         var academicYear = new AcademicYear(command);
         academicYearRepository.save(academicYear);
+        return academicYear.getId();
     }
 
     @Override
