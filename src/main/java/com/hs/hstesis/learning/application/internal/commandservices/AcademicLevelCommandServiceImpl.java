@@ -9,6 +9,7 @@ import com.hs.hstesis.learning.domain.model.commands.EditAcademicLevelNameComman
 import com.hs.hstesis.learning.domain.model.entities.AcademicLevel;
 import com.hs.hstesis.learning.domain.services.AcademicLevelCommandService;
 import com.hs.hstesis.learning.infrastructure.jpa.AcademicLevelRepository;
+import com.hs.hstesis.learning.infrastructure.jpa.SectionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -16,9 +17,12 @@ import java.util.Optional;
 @Service
 public class AcademicLevelCommandServiceImpl implements AcademicLevelCommandService {
     private final AcademicLevelRepository academicLevelRepository;
+    private final SectionRepository sectionRepository;
 
-    public AcademicLevelCommandServiceImpl(AcademicLevelRepository academicLevelRepository) {
+    public AcademicLevelCommandServiceImpl(AcademicLevelRepository academicLevelRepository,
+                                           SectionRepository sectionRepository) {
         this.academicLevelRepository = academicLevelRepository;
+        this.sectionRepository = sectionRepository;
     }
 
     @Override
@@ -47,6 +51,9 @@ public class AcademicLevelCommandServiceImpl implements AcademicLevelCommandServ
     public void handle(DeleteAcademicLevelCommand command){
         if (!academicLevelRepository.existsById(command.id())) {
             throw new AcademicLevelNotFoundException(command.id());
+        }
+        if (sectionRepository.existsByAcademicLevelId(command.id())) {
+            throw new AcademicLevelRelatedToSectionsException(command.id());
         }
         academicLevelRepository.deleteById(command.id());
     }
