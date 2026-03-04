@@ -12,6 +12,8 @@ import com.hs.hstesis.learning.infrastructure.jpa.AcademicLevelRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.SectionRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 public class SectionCommandServiceImpl implements SectionCommandService {
     private final SectionRepository sectionRepository;
@@ -23,7 +25,7 @@ public class SectionCommandServiceImpl implements SectionCommandService {
     }
 
     @Override
-    public void handle(CreateSectionCommand command){
+    public Long handle(CreateSectionCommand command){
         var level = academicLevelRepository.findById(command.academicLevelId())
                 .orElseThrow(() -> new AcademicLevelNotFoundException(command.academicLevelId()));
         if(sectionRepository.existsByName(command.name())){
@@ -31,10 +33,11 @@ public class SectionCommandServiceImpl implements SectionCommandService {
         }
         var section = new Section(command, level);
         sectionRepository.save(section);
+        return section.getId();
     }
 
     @Override
-    public void handle(EditSectionNameCommand command){
+    public Optional<Section> handle(EditSectionNameCommand command){
         var section = sectionRepository.findById(command.id())
                 .orElseThrow(() -> new SectionNotFoundException(command.id()));
         if(sectionRepository.existsByName(command.newName())){
@@ -42,6 +45,7 @@ public class SectionCommandServiceImpl implements SectionCommandService {
         }
         section.editName(command);
         sectionRepository.save(section);
+        return Optional.of(section);
     }
 
     @Override

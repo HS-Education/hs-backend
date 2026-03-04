@@ -13,6 +13,8 @@ import com.hs.hstesis.learning.infrastructure.jpa.AreaRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 public class CourseCommandServiceImpl implements CourseCommandService {
     private final CourseRepository courseRepository;
@@ -24,7 +26,7 @@ public class CourseCommandServiceImpl implements CourseCommandService {
     }
 
     @Override
-    public void handle(CreateCourseCommand command){
+    public Long handle(CreateCourseCommand command){
         var area = areaRepository.findById(command.areaId()).orElseThrow(()-> new AreaNotFoundException(command.areaId()));
         if(command.name().length() < 5 || command.name().length() > 20){
             throw new InvalidCourseNameException(command.name());
@@ -34,10 +36,11 @@ public class CourseCommandServiceImpl implements CourseCommandService {
         }
         var course = new Course(command, area);
         courseRepository.save(course);
+        return course.getId();
     }
 
     @Override
-    public void handle(EditCourseNameCommand command){
+    public Optional<Course> handle(EditCourseNameCommand command){
         var course = courseRepository.findById(command.id())
                 .orElseThrow(() -> new AreaNotFoundException(command.id()));
         if(command.newName().length() < 5 || command.newName().length() > 20){
@@ -48,6 +51,7 @@ public class CourseCommandServiceImpl implements CourseCommandService {
         }
         course.editName(command);
         courseRepository.save(course);
+        return Optional.of(course);
     }
 
     @Override

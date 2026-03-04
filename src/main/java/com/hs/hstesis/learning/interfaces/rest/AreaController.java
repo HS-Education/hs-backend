@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping(value = "/api/v1/area", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/api/v1/areas", produces = MediaType.APPLICATION_JSON_VALUE)
 public class AreaController {
     private final AreaCommandService areaCommandService;
     private final AreaQueryService areaQueryService;
@@ -59,13 +59,15 @@ public class AreaController {
         return ResponseEntity.ok(areaResources);
     }
 
-    @PutMapping("/{areaId}")
+    @PutMapping("/update-name/{areaId}")
     public ResponseEntity<AreaResource> updateAreaName(@PathVariable Long areaId, @RequestBody UpdateAreaResource updateAreaResource) {
         var updateAreaCommand = UpdateAreaCommandFromResourceAssembler.toCommandFromResource(areaId, updateAreaResource);
         var updatedArea = areaCommandService.handle(updateAreaCommand);
+
         if(updatedArea.isEmpty()){
             return ResponseEntity.badRequest().build();
         }
+
         var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(updatedArea.get());
         return ResponseEntity.ok(areaResource);
     }

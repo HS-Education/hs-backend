@@ -8,4 +8,5 @@ import java.util.List;
 public interface SectionRepository extends JpaRepository<Section, Long> {
     List<Section> findAllByAcademicLevelId(Long academicLevelId);
     boolean existsByName(String name);
+    boolean existsByAcademicLevelId(Long academicLevelId);
 }

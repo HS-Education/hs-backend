@@ -16,7 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping(value = "/api/v1/academic-year", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/api/v1/academic-years", produces = MediaType.APPLICATION_JSON_VALUE)
 public class AcademicYearController {
     private final AcademicYearCommandService academicYearCommandService;
     private final AcademicYearQueryService academicYearQueryService;

@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping(value = "/api/v1/academic-level", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/api/v1/academic-levels", produces = MediaType.APPLICATION_JSON_VALUE)
 public class AcademicLevelController {
     private final AcademicLevelCommandService academicLevelCommandService;
     private final AcademicLevelQueryService academicLevelQueryService;
@@ -56,7 +56,7 @@ public class AcademicLevelController {
         return ResponseEntity.ok(academicResources);
     }
 
-    @PutMapping("/{academicLevelId}")
+    @PutMapping("/update-name/{academicLevelId}")
     public ResponseEntity<AcademicLevelResource> updateAcademicLevelName(@PathVariable Long academicLevelId, @RequestBody UpdateAcademicLevelResource updateAcademicLevelResource) {
 
         var editAcademicLevelNameCommand = UpdateAcademicLevelCommandFromResourceAssembler.toCommandFromResource(academicLevelId, updateAcademicLevelResource);

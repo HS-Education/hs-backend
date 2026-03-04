@@ -2,6 +2,7 @@ package com.hs.hstesis.learning.application.internal.commandservices;
 
 import com.hs.hstesis.learning.domain.exceptions.AcademicLevelNameAlreadyExistsException;
 import com.hs.hstesis.learning.domain.exceptions.AcademicLevelNotFoundException;
+import com.hs.hstesis.learning.domain.exceptions.AcademicLevelRelatedToSectionsException;
 import com.hs.hstesis.learning.domain.model.commands.CreateAcademicLevelCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAcademicLevelCommand;
 import com.hs.hstesis.learning.domain.model.commands.EditAcademicLevelNameCommand;
