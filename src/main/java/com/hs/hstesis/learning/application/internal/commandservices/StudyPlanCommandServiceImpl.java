@@ -30,7 +30,7 @@ public class StudyPlanCommandServiceImpl implements StudyPlanCommandService {
 
     @Override
     @Transactional
-    public void handle(AddCourseToStudyPlanCommand command) {
+    public Long handle(AddCourseToStudyPlanCommand command) {
         var academicLevel = academicLevelRepository.findById(command.academicLevelId())
                 .orElseThrow(() -> new AcademicLevelNotFoundException(command.academicLevelId()));
 
@@ -43,14 +43,16 @@ public class StudyPlanCommandServiceImpl implements StudyPlanCommandService {
 
         var studyPlan = new StudyPlan(academicLevel, course);
         studyPlanRepository.save(studyPlan);
+        return studyPlan.getId();
     }
 
     @Override
     @Transactional
     public void handle(RemoveCourseFromStudyPlanCommand command) {
-        if (!studyPlanRepository.existsById(command.studyPlanId())) {
-            throw new StudyPlanEntryNotFoundException(command.studyPlanId());
-        }
-        studyPlanRepository.deleteById(command.studyPlanId());
+        var studyPlan = studyPlanRepository
+                .findByAcademicLevelIdAndCourseId(command.academicLevelId(), command.courseId())
+                .orElseThrow(() -> new StudyPlanEntryNotFoundException(
+                        command.academicLevelId(), command.courseId()));
+        studyPlanRepository.delete(studyPlan);
     }
 }

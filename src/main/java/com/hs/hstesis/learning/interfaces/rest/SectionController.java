@@ -11,6 +11,7 @@ import com.hs.hstesis.learning.interfaces.rest.resources.UpdateSectionResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateSectionCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.SectionResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.UpdateSectionCommandFromResourceAssembler;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping(value = "/api/v1/sections", produces = MediaType.APPLICATION_JSON_VALUE)
+@Tag(name = "Sections", description = "Section management endpoints")
 public class SectionController {
     private final SectionCommandService sectionCommandService;
     private final SectionQueryService sectionQueryService;

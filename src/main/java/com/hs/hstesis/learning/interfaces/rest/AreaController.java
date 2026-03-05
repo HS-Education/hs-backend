@@ -11,6 +11,7 @@ import com.hs.hstesis.learning.interfaces.rest.resources.UpdateAreaResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.AreaResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateAreaCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.UpdateAreaCommandFromResourceAssembler;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping(value = "/api/v1/areas", produces = MediaType.APPLICATION_JSON_VALUE)
+@Tag(name = "Areas", description = "Area management endpoints")
 public class AreaController {
     private final AreaCommandService areaCommandService;
     private final AreaQueryService areaQueryService;

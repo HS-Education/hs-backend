@@ -11,6 +11,7 @@ import com.hs.hstesis.learning.interfaces.rest.resources.UpdateCourseResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.CourseResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateCourseCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.UpdateCourseCommandFromResourceAssembler;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping(value = "/api/v1/courses", produces = MediaType.APPLICATION_JSON_VALUE)
+@Tag(name = "Courses", description = "Course management endpoints")
 public class CourseController {
     private final CourseCommandService courseCommandService;
     private final CourseQueryService courseQueryService;

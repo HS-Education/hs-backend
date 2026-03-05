@@ -36,10 +36,13 @@ public class AcademicYearCommandServiceImpl implements AcademicYearCommandServic
 
     @Override
     public void handle(DeleteAcademicYearCommand command){
-        if(!academicYearRepository.existsById(command.id())) {
-            throw new AcademicYearNotFoundException(command.id());
+        var academicYear = academicYearRepository.findById(command.id())
+                .orElseThrow(() -> new AcademicYearNotFoundException(command.id()));
+
+        if(academicYear.getIsActive()) {
+            throw new AcademicYearIsActiveException(academicYear.getYear());
         }
-        academicYearRepository.deleteById(command.id());
+        academicYearRepository.delete(academicYear);
     }
 
     @Override

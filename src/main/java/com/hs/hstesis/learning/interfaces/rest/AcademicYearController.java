@@ -10,6 +10,7 @@ import com.hs.hstesis.learning.interfaces.rest.resources.AcademicYearResource;
 import com.hs.hstesis.learning.interfaces.rest.resources.CreateAcademicYearResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.AcademicYearResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateAcademicYearCommandFromResourceAssembler;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping(value = "/api/v1/academic-years", produces = MediaType.APPLICATION_JSON_VALUE)
+@Tag(name = "Academic Years", description = "Academic year management endpoints")
 public class AcademicYearController {
     private final AcademicYearCommandService academicYearCommandService;
     private final AcademicYearQueryService academicYearQueryService;

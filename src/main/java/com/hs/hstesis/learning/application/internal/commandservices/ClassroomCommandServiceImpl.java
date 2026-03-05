@@ -34,40 +34,41 @@ public class ClassroomCommandServiceImpl implements ClassroomCommandService {
 
     @Override
     @Transactional
-    public void handle(GenerateClassroomsCommand command) {
+    public int handle(GenerateClassroomsCommand command) {
 
-        var academicLevel = academicLevelRepository.findById(command.academicLevelId())
-                .orElseThrow(() -> new AcademicLevelNotFoundException(command.academicLevelId()));
+        var activeYear = academicYearRepository.findByIsActiveTrue()
+                .orElseThrow(() -> new NoActiveAcademicYearException());
 
-        var academicYear = academicYearRepository.findById(command.academicYearId())
-                .orElseThrow(() -> new AcademicYearNotFoundException(command.academicYearId()));
+        var allLevels = academicLevelRepository.findAll();
 
-        if (!academicYear.getIsActive()) {
-            throw new AcademicYearIsNotActiveException(academicYear.getYear());
+        if (allLevels.isEmpty()) {
+            throw new NoAcademicLevelsFoundException();
         }
 
-        var studyPlanEntries = studyPlanRepository.findAllByAcademicLevelId(academicLevel.getId());
-        if (studyPlanEntries.isEmpty()) {
-            throw new StudyPlanNotConfiguredException(academicLevel.getName());
-        }
+        int classroomsCreated = 0;
 
-        var sections = sectionRepository.findAllByAcademicLevelId(academicLevel.getId());
-        if (sections.isEmpty()) {
-            throw new NoSectionsFoundForAcademicLevelException(academicLevel.getName());
-        }
+        for (var level : allLevels) {
+            var studyPlanEntries = studyPlanRepository.findAllByAcademicLevelId(level.getId());
+            if (studyPlanEntries.isEmpty()) continue;
 
-        for (var section : sections) {
-            for (var entry : studyPlanEntries) {
-                var course = entry.getCourse();
+            var sections = sectionRepository.findAllByAcademicLevelId(level.getId());
+            if (sections.isEmpty()) continue;
 
-                if (!classroomRepository.existsByCourseIdAndSectionIdAndAcademicYearId(
-                        course.getId(), section.getId(), academicYear.getId())) {
+            for (var section : sections) {
+                for (var entry : studyPlanEntries) {
+                    var course = entry.getCourse();
 
-                    var classroom = new Classroom(course, section, academicYear);
-                    classroomRepository.save(classroom);
+                    if (!classroomRepository.existsByCourseIdAndSectionIdAndAcademicYearId(
+                            course.getId(), section.getId(), activeYear.getId())) {
+
+                        var classroom = new Classroom(course, section, activeYear);
+                        classroomRepository.save(classroom);
+                        classroomsCreated++;
+                    }
                 }
             }
         }
+        return classroomsCreated;
     }
 
     @Override

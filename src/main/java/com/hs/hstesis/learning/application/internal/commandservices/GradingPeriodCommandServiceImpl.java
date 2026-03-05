@@ -30,7 +30,7 @@ public class GradingPeriodCommandServiceImpl implements GradingPeriodCommandServ
     }
 
     @Override
-    public void handle(CreateGradingPeriodCommand command) {
+    public Long handle(CreateGradingPeriodCommand command) {
         if (command.startDate().isBefore(LocalDate.now())) {
             throw new DateInPastException(command.startDate());
         }
@@ -59,6 +59,7 @@ public class GradingPeriodCommandServiceImpl implements GradingPeriodCommandServ
 
         var gradingPeriod = new GradingPeriod(command, academicYear);
         gradingPeriodRepository.save(gradingPeriod);
+        return gradingPeriod.getId();
     }
 
     @Override

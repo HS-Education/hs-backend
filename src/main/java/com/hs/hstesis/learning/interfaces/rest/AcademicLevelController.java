@@ -7,6 +7,7 @@ import com.hs.hstesis.learning.domain.services.AcademicLevelCommandService;
 import com.hs.hstesis.learning.domain.services.AcademicLevelQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.*;
 import com.hs.hstesis.learning.interfaces.rest.transform.*;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping(value = "/api/v1/academic-levels", produces = MediaType.APPLICATION_JSON_VALUE)
+@Tag(name = "Academic Levels", description = "Academic level management endpoints")
 public class AcademicLevelController {
     private final AcademicLevelCommandService academicLevelCommandService;
     private final AcademicLevelQueryService academicLevelQueryService;

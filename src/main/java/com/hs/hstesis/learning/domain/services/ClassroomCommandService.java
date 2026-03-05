@@ -5,6 +5,6 @@ import com.hs.hstesis.learning.domain.model.commands.DeleteClassroomCommand;
 import com.hs.hstesis.learning.domain.model.commands.GenerateClassroomsCommand;
 
 public interface ClassroomCommandService {
-    void handle(GenerateClassroomsCommand command);
+    int handle(GenerateClassroomsCommand command);
     void handle(DeleteClassroomCommand command);
 }

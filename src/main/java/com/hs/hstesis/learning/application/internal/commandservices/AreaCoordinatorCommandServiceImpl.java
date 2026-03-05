@@ -32,18 +32,14 @@ public class AreaCoordinatorCommandServiceImpl implements AreaCoordinatorCommand
 
     @Override
     public Long handle(AssignAreaCoordinatorCommand command){
-        if(areaCoordinatorRepository.existsByUserIdAndAreaId(command.userId(), command.areaId())){
-            throw new UserAlreadyAssignedToAreaException(command.userId(), command.areaId());
-        }
-
-        if (areaCoordinatorRepository.existsByAreaId(command.areaId())) {
-            throw new AreaAlreadyHasCoordinatorException(command.areaId());
-        }
-
         var user = userRepository.findById(command.userId())
-                .orElseThrow(() -> new CoordinatorNotFoundException(command.userId()));
+                .orElseThrow(() -> new UserNotFoundException(command.userId()));
         var area = areaRepository.findById(command.areaId())
                 .orElseThrow(() -> new AreaNotFoundException(command.areaId()));
+
+        if (areaCoordinatorRepository.existsByAreaId(area.getId())) {
+            throw new AreaAlreadyHasCoordinatorException(area.getName());
+        }
 
         var coordinator = new AreaCoordinator(user, area);
         areaCoordinatorRepository.save(coordinator);
@@ -56,10 +52,10 @@ public class AreaCoordinatorCommandServiceImpl implements AreaCoordinatorCommand
         var coordinatorRole = roleRepository.findByRoleName(Roles.ROLE_COORDINATOR)
                 .orElseThrow(() -> new RoleNotFoundException(Roles.ROLE_COORDINATOR));
 
-        var area = areaRepository.findById(command.areaId())
-                .orElseThrow(() -> new AreaNotFoundException(command.areaId()));
         var newTeacher = userRepository.findById(command.newCoordinatorId())
                 .orElseThrow(() -> new UserNotFoundException(command.newCoordinatorId()));
+        var area = areaRepository.findById(command.areaId())
+                .orElseThrow(() -> new AreaNotFoundException(command.areaId()));
 
         areaCoordinatorRepository.findByAreaId(area.getId()).ifPresent(oldAssignment -> {
             var oldTeacher = oldAssignment.getUser();

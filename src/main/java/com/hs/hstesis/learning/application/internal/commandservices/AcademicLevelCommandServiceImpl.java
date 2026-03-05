@@ -49,12 +49,13 @@ public class AcademicLevelCommandServiceImpl implements AcademicLevelCommandServ
 
     @Override
     public void handle(DeleteAcademicLevelCommand command){
-        if (!academicLevelRepository.existsById(command.id())) {
-            throw new AcademicLevelNotFoundException(command.id());
-        }
+        var academicLevel = academicLevelRepository.findById(command.id())
+                .orElseThrow(() -> new AcademicLevelNotFoundException(command.id()));
+
         if (sectionRepository.existsByAcademicLevelId(command.id())) {
-            throw new AcademicLevelRelatedToSectionsException(command.id());
+            throw new AcademicLevelRelatedToSectionsException(academicLevel.getName());
         }
+
         academicLevelRepository.deleteById(command.id());
     }
 }

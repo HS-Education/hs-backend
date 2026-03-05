@@ -1,7 +1,7 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
 public class AcademicLevelRelatedToSectionsException extends RuntimeException {
-    public AcademicLevelRelatedToSectionsException(Long id) {
-        super(String.format("Academic level with id %d cannot be deleted because it is related to sections.", id));
+    public AcademicLevelRelatedToSectionsException(String name) {
+        super(String.format("Academic level '%s' cannot be deleted because it has associated sections.", name));
     }
 }
