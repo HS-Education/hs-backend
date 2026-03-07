@@ -1,7 +1,7 @@
 package com.hs.hstesis.learning.domain.model.aggregates;
 
 import com.hs.hstesis.learning.domain.model.commands.CreateSectionCommand;
-import com.hs.hstesis.learning.domain.model.commands.EditSectionNameCommand;
+import com.hs.hstesis.learning.domain.model.commands.UpdateSectionCommand;
 import com.hs.hstesis.learning.domain.model.entities.AcademicLevel;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -30,7 +30,13 @@ public class Section {
         this.academicLevel = academicLevel;
     }
 
-    public void editName(EditSectionNameCommand command) {
-        this.name = command.newName();
+    public void update(UpdateSectionCommand command) {
+        if (command.name() != null) {
+            changeName(command.name());
+        }
+    }
+
+    private void changeName(String name) {
+        this.name = name;
     }
 }

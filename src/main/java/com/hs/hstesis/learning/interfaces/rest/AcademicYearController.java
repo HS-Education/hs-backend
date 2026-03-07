@@ -4,6 +4,7 @@ import com.hs.hstesis.learning.domain.model.commands.ActivateAcademicYearCommand
 import com.hs.hstesis.learning.domain.model.commands.CloseAcademicYearCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAcademicYearCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetAcademicYearByIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetAllAcademicYearsQuery;
 import com.hs.hstesis.learning.domain.services.AcademicYearCommandService;
 import com.hs.hstesis.learning.domain.services.AcademicYearQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.AcademicYearResource;
@@ -15,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping(value = "/api/v1/academic-years", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -46,6 +49,18 @@ public class AcademicYearController {
 
         var academicYearResource = AcademicYearResourceFromEntityAssembler.toResourceFromEntity(academicYear.get());
         return new ResponseEntity<>(academicYearResource, HttpStatus.CREATED);
+    }
+
+    @GetMapping()
+    public ResponseEntity<List<AcademicYearResource>> getAllAcademicYears() {
+        var getAllAcademicYearsQuery = new GetAllAcademicYearsQuery();
+        var academicYears = academicYearQueryService.handle(getAllAcademicYearsQuery);
+
+        var resources = academicYears.stream()
+                .map(AcademicYearResourceFromEntityAssembler::toResourceFromEntity)
+                .toList();
+
+        return ResponseEntity.ok(resources);
     }
 
     @PutMapping("/activate-year/{academicYearId}")

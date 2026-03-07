@@ -1,7 +1,7 @@
 package com.hs.hstesis.learning.domain.model.aggregates;
 
 import com.hs.hstesis.learning.domain.model.commands.CreateCourseCommand;
-import com.hs.hstesis.learning.domain.model.commands.EditCourseNameCommand;
+import com.hs.hstesis.learning.domain.model.commands.UpdateCourseCommand;
 import com.hs.hstesis.learning.domain.model.entities.Area;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -30,7 +30,13 @@ public class Course {
         this.area = area;
     }
 
-    public void editName(EditCourseNameCommand command) {
-        this.name = command.newName();
+    public void update(UpdateCourseCommand command) {
+        if(command.name() != null) {
+            changeName(command.name());
+        }
+    }
+
+    private void changeName(String name) {
+        this.name = name;
     }
 }

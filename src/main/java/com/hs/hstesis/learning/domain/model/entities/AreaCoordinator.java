@@ -21,8 +21,8 @@ public class AreaCoordinator {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "area_id", nullable = false)
+    @OneToOne(optional = false)
+    @JoinColumn(name = "area_id", nullable = false, unique = true)
     private Area area;
 
     protected AreaCoordinator() {}

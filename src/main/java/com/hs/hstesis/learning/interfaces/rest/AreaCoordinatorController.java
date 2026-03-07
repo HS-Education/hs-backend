@@ -9,6 +9,7 @@ import com.hs.hstesis.learning.interfaces.rest.resources.ReassignAreaCoordinator
 import com.hs.hstesis.learning.interfaces.rest.transform.AreaCoordinatorResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.AssignAreaCoordinatorCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.ReassignAreaCoordinatorCommandFromResourceAssembler;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping(value = "/api/v1/area-coordinators", produces = MediaType.APPLICATION_JSON_VALUE)
+@Tag(name = "Area Coordinators", description = "Endpoints for managing area coordinators")
 public class AreaCoordinatorController {
     private final AreaCoordinatorCommandService areaCoordinatorCommandService;
     private final AreaCoordinatorQueryService areaCoordinatorQueryService;

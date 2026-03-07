@@ -1,3 +1,3 @@
 package com.hs.hstesis.learning.interfaces.rest.resources;
 
-public record UpdateAreaResource(String newName) {}
+public record UpdateAreaResource(String name) {}

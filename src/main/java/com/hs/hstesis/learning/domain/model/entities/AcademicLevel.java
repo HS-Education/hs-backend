@@ -1,7 +1,7 @@
 package com.hs.hstesis.learning.domain.model.entities;
 
 import com.hs.hstesis.learning.domain.model.commands.CreateAcademicLevelCommand;
-import com.hs.hstesis.learning.domain.model.commands.EditAcademicLevelNameCommand;
+import com.hs.hstesis.learning.domain.model.commands.UpdateAcademicLevelCommand;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,13 +17,19 @@ public class AcademicLevel {
     @Column(nullable = false)
     private String name;
 
-    protected AcademicLevel() {};
+    protected AcademicLevel() {}
 
     public AcademicLevel(CreateAcademicLevelCommand command){
         this.name = command.name();
     }
 
-    public void editName(EditAcademicLevelNameCommand command){
-        this.name = command.newName();
+    public void update(UpdateAcademicLevelCommand command){
+        if(command.name() != null){
+            changeName(command.name());
+        }
+    }
+
+    private void changeName(String name){
+        this.name = name;
     }
 }

@@ -3,6 +3,7 @@ package com.hs.hstesis.learning.interfaces.rest;
 import com.hs.hstesis.learning.domain.model.commands.DeleteSectionCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetAllSectionsQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetSectionByIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetSectionsByAcademicLevelIdQuery;
 import com.hs.hstesis.learning.domain.services.SectionCommandService;
 import com.hs.hstesis.learning.domain.services.SectionQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.CreateSectionResource;
@@ -18,7 +19,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping(value = "/api/v1/sections", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -62,8 +62,18 @@ public class SectionController {
         return ResponseEntity.ok(sectionResources);
     }
 
-    @PutMapping("/update-name/{sectionId}")
-    public ResponseEntity<SectionResource> updateSectionName(@PathVariable Long sectionId, @RequestBody UpdateSectionResource updateSectionResource) {
+    @GetMapping("/{academicLevelId}")
+    public ResponseEntity<List<SectionResource>> getSectionsByAcademicLevelId(@PathVariable Long academicLevelId) {
+        var getSectionsByAcademicLevelIdQuery = new GetSectionsByAcademicLevelIdQuery(academicLevelId);
+        var sections = sectionQueryService.handle(getSectionsByAcademicLevelIdQuery);
+        var sectionResources = sections.stream()
+                .map(SectionResourceFromEntityAssembler::toResourceFromEntity)
+                .toList();
+        return ResponseEntity.ok(sectionResources);
+    }
+
+    @PatchMapping("/{sectionId}")
+    public ResponseEntity<SectionResource> updateSection(@PathVariable Long sectionId, @RequestBody UpdateSectionResource updateSectionResource) {
         var updateSectionCommand = UpdateSectionCommandFromResourceAssembler.toCommandFromResource(sectionId, updateSectionResource);
         var updatedSection = sectionCommandService.handle(updateSectionCommand);
 

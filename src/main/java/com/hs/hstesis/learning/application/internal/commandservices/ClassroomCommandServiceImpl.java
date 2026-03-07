@@ -37,7 +37,7 @@ public class ClassroomCommandServiceImpl implements ClassroomCommandService {
     public int handle(GenerateClassroomsCommand command) {
 
         var activeYear = academicYearRepository.findByIsActiveTrue()
-                .orElseThrow(() -> new NoActiveAcademicYearException());
+                .orElseThrow(NoActiveAcademicYearException::new);
 
         var allLevels = academicLevelRepository.findAll();
 

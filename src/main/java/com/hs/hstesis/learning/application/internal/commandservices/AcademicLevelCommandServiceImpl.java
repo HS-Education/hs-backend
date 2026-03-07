@@ -5,7 +5,7 @@ import com.hs.hstesis.learning.domain.exceptions.AcademicLevelNotFoundException;
 import com.hs.hstesis.learning.domain.exceptions.AcademicLevelRelatedToSectionsException;
 import com.hs.hstesis.learning.domain.model.commands.CreateAcademicLevelCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAcademicLevelCommand;
-import com.hs.hstesis.learning.domain.model.commands.EditAcademicLevelNameCommand;
+import com.hs.hstesis.learning.domain.model.commands.UpdateAcademicLevelCommand;
 import com.hs.hstesis.learning.domain.model.entities.AcademicLevel;
 import com.hs.hstesis.learning.domain.services.AcademicLevelCommandService;
 import com.hs.hstesis.learning.infrastructure.jpa.AcademicLevelRepository;
@@ -36,13 +36,15 @@ public class AcademicLevelCommandServiceImpl implements AcademicLevelCommandServ
     }
 
     @Override
-    public Optional<AcademicLevel> handle(EditAcademicLevelNameCommand command){
+    public Optional<AcademicLevel> handle(UpdateAcademicLevelCommand command){
         var academicLevel = academicLevelRepository.findById(command.id())
                 .orElseThrow(() -> new AcademicLevelNotFoundException(command.id()));
-        if(academicLevelRepository.existsByName(command.newName())){
-            throw new AcademicLevelNameAlreadyExistsException(command.newName());
+
+        if(academicLevelRepository.existsByName(command.name())){
+            throw new AcademicLevelNameAlreadyExistsException(command.name());
         }
-        academicLevel.editName(command);
+
+        academicLevel.update(command);
         academicLevelRepository.save(academicLevel);
         return Optional.of(academicLevel);
     }

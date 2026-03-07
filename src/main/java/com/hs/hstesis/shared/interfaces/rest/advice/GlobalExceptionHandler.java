@@ -6,6 +6,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -29,6 +31,30 @@ public class GlobalExceptionHandler {
                 ex.getMessage()
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    // --- UNAUTHORIZED (401) ---
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiErrorResponse> handleAuthenticationException(AuthenticationException ex) {
+        logger.error("Unauthorized: {}", ex.getMessage());
+        var errorResponse = new ApiErrorResponse(
+                HttpStatus.UNAUTHORIZED.value(),
+                HttpStatus.UNAUTHORIZED.getReasonPhrase(),
+                "Authentication is required to access this resource."
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+
+    // --- FORBIDDEN (403) ---
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
+        logger.error("Forbidden: {}", ex.getMessage());
+        var errorResponse = new ApiErrorResponse(
+                HttpStatus.FORBIDDEN.value(),
+                HttpStatus.FORBIDDEN.getReasonPhrase(),
+                "You do not have permission to access this resource."
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }
 
     // --- NOT FOUND (404) ---
@@ -68,13 +94,13 @@ public class GlobalExceptionHandler {
             BimesterAlreadyExistsInAcademicYearException.class,
             CannotDeleteActiveClassroomException.class,
             CannotDeleteHistoricalDataException.class,
-            CourseAlreadyExistsInAreaException.class,
+            CourseNameAlreadyExistsInAreaException.class,
             CourseAlreadyInStudyPlanException.class,
             GradingPeriodOverlapException.class,
             IncompleteAcademicYearException.class,
             InvalidGradingPeriodDeleteException.class,
             NoActiveAcademicYearException.class,
-            SectionNameAlreadyExistsException.class
+            SectionNameAlreadyExistsInAcademicLevelException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());

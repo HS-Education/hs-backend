@@ -1,6 +1,5 @@
 package com.hs.hstesis.iam.infrastructure.authorization.sfs.pipeline;
 
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.jspecify.annotations.NonNull;

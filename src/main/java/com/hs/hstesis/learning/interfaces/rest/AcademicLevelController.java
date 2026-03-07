@@ -48,7 +48,7 @@ public class AcademicLevelController {
         return new ResponseEntity<>(academicLevelResource, HttpStatus.CREATED);
     }
 
-    @GetMapping
+    @GetMapping()
     public ResponseEntity<List<AcademicLevelResource>> getAllAcademicLevels() {
         var getAllAcademicLevelsQuery = new GetAllAcademicLevelsQuery();
         var academicLevels = academicLevelQueryService.handle(getAllAcademicLevelsQuery);
@@ -58,11 +58,11 @@ public class AcademicLevelController {
         return ResponseEntity.ok(academicResources);
     }
 
-    @PutMapping("/update-name/{academicLevelId}")
-    public ResponseEntity<AcademicLevelResource> updateAcademicLevelName(@PathVariable Long academicLevelId, @RequestBody UpdateAcademicLevelResource updateAcademicLevelResource) {
+    @PatchMapping("/{academicLevelId}")
+    public ResponseEntity<AcademicLevelResource> updateAcademicLevel(@PathVariable Long academicLevelId, @RequestBody UpdateAcademicLevelResource updateAcademicLevelResource) {
 
-        var editAcademicLevelNameCommand = UpdateAcademicLevelCommandFromResourceAssembler.toCommandFromResource(academicLevelId, updateAcademicLevelResource);
-        var updatedAcademicLevel = academicLevelCommandService.handle(editAcademicLevelNameCommand);
+        var updateAcademicLevelCommand = UpdateAcademicLevelCommandFromResourceAssembler.toCommandFromResource(academicLevelId, updateAcademicLevelResource);
+        var updatedAcademicLevel = academicLevelCommandService.handle(updateAcademicLevelCommand);
 
         if (updatedAcademicLevel.isEmpty()) {
             return ResponseEntity.badRequest().build();

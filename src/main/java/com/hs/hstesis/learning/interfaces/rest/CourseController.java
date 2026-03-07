@@ -3,6 +3,7 @@ package com.hs.hstesis.learning.interfaces.rest;
 import com.hs.hstesis.learning.domain.model.commands.DeleteCourseCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetAllCoursesQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetCourseByIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetCoursesByAreaIdQuery;
 import com.hs.hstesis.learning.domain.services.CourseCommandService;
 import com.hs.hstesis.learning.domain.services.CourseQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.CourseResource;
@@ -61,8 +62,18 @@ public class CourseController {
         return ResponseEntity.ok(courseResources);
     }
 
-    @PutMapping("/update-name/{courseId}")
-    public ResponseEntity<CourseResource> updateCourseName(@PathVariable Long courseId, @RequestBody UpdateCourseResource updateCourseResource) {
+    @GetMapping("/{areaId}")
+    public ResponseEntity<List<CourseResource>> getCoursesByAreaId(@PathVariable Long areaId){
+        var getCoursesByAreaIdQuery = new GetCoursesByAreaIdQuery(areaId);
+        var courses = courseQueryService.handle(getCoursesByAreaIdQuery);
+        var courseResources = courses.stream()
+                .map(CourseResourceFromEntityAssembler::toResourceFromEntity)
+                .toList();
+        return ResponseEntity.ok(courseResources);
+    }
+
+    @PatchMapping("/{courseId}")
+    public ResponseEntity<CourseResource> updateCourse(@PathVariable Long courseId, @RequestBody UpdateCourseResource updateCourseResource) {
         var updateCourseCommand = UpdateCourseCommandFromResourceAssembler.toCommandFromResource(courseId, updateCourseResource);
         var updatedCourse = courseCommandService.handle(updateCourseCommand);
 

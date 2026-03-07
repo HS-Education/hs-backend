@@ -9,6 +9,7 @@ import com.hs.hstesis.iam.interfaces.rest.resources.AuthenticatedUserResource;
 import com.hs.hstesis.iam.interfaces.rest.resources.SignInResource;
 import com.hs.hstesis.iam.interfaces.rest.transform.AuthenticatedUserResourceFromEntityAssembler;
 import com.hs.hstesis.iam.interfaces.rest.transform.SignInCommandFromResourceAssembler;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
@@ -19,6 +20,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping(value = "/api/v1/auth", produces = MediaType.APPLICATION_JSON_VALUE)
+@Tag(name = "Authentication", description = "Endpoints for user authentication and token management")
 public class AuthController {
 
     private final SignInCommandService signInCommandService;

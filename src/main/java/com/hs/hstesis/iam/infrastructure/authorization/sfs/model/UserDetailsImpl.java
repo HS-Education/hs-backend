@@ -3,6 +3,7 @@ package com.hs.hstesis.iam.infrastructure.authorization.sfs.model;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.hs.hstesis.iam.domain.model.aggregates.User;
 import com.hs.hstesis.iam.domain.model.entity.Permission;
+import com.hs.hstesis.iam.domain.model.entity.Role;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
@@ -58,7 +59,7 @@ public class UserDetailsImpl implements UserDetails {
                 .collect(Collectors.toList());
 
         List<String> roles = user.getRoles().stream()
-                .map(role -> role.getRoleName())
+                .map(Role::getRoleName)
                 .collect(Collectors.toList());
 
         return new UserDetailsImpl(

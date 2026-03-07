@@ -1,12 +1,12 @@
 package com.hs.hstesis.learning.application.internal.commandservices;
 
 import com.hs.hstesis.learning.domain.exceptions.AcademicLevelNotFoundException;
-import com.hs.hstesis.learning.domain.exceptions.SectionNameAlreadyExistsException;
+import com.hs.hstesis.learning.domain.exceptions.SectionNameAlreadyExistsInAcademicLevelException;
 import com.hs.hstesis.learning.domain.exceptions.SectionNotFoundException;
 import com.hs.hstesis.learning.domain.model.aggregates.Section;
 import com.hs.hstesis.learning.domain.model.commands.CreateSectionCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteSectionCommand;
-import com.hs.hstesis.learning.domain.model.commands.EditSectionNameCommand;
+import com.hs.hstesis.learning.domain.model.commands.UpdateSectionCommand;
 import com.hs.hstesis.learning.domain.services.SectionCommandService;
 import com.hs.hstesis.learning.infrastructure.jpa.AcademicLevelRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.SectionRepository;
@@ -26,24 +26,26 @@ public class SectionCommandServiceImpl implements SectionCommandService {
 
     @Override
     public Long handle(CreateSectionCommand command){
-        var level = academicLevelRepository.findById(command.academicLevelId())
+        var academicLevel = academicLevelRepository.findById(command.academicLevelId())
                 .orElseThrow(() -> new AcademicLevelNotFoundException(command.academicLevelId()));
         if(sectionRepository.existsByName(command.name())){
-            throw new SectionNameAlreadyExistsException(command.name());
+            throw new SectionNameAlreadyExistsInAcademicLevelException(command.name(), academicLevel.getName());
         }
-        var section = new Section(command, level);
+        var section = new Section(command, academicLevel);
         sectionRepository.save(section);
         return section.getId();
     }
 
     @Override
-    public Optional<Section> handle(EditSectionNameCommand command){
+    public Optional<Section> handle(UpdateSectionCommand command){
         var section = sectionRepository.findById(command.id())
                 .orElseThrow(() -> new SectionNotFoundException(command.id()));
-        if(sectionRepository.existsByName(command.newName())){
-            throw new SectionNameAlreadyExistsException(command.newName());
+
+        if(sectionRepository.existsByName(command.name())){
+            throw new SectionNameAlreadyExistsInAcademicLevelException(command.name(), section.getAcademicLevel().getName());
         }
-        section.editName(command);
+
+        section.update(command);
         sectionRepository.save(section);
         return Optional.of(section);
     }

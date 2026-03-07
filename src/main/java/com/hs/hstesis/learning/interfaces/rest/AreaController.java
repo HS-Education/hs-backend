@@ -15,10 +15,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping(value = "/api/v1/areas", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Areas", description = "Area management endpoints")
@@ -61,8 +63,9 @@ public class AreaController {
         return ResponseEntity.ok(areaResources);
     }
 
-    @PutMapping("/update-name/{areaId}")
-    public ResponseEntity<AreaResource> updateAreaName(@PathVariable Long areaId, @RequestBody UpdateAreaResource updateAreaResource) {
+    @PatchMapping("/{areaId}")
+    public ResponseEntity<AreaResource> updateArea(@PathVariable Long areaId, @RequestBody UpdateAreaResource updateAreaResource) {
+
         var updateAreaCommand = UpdateAreaCommandFromResourceAssembler.toCommandFromResource(areaId, updateAreaResource);
         var updatedArea = areaCommandService.handle(updateAreaCommand);
 

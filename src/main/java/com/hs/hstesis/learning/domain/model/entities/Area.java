@@ -1,7 +1,7 @@
 package com.hs.hstesis.learning.domain.model.entities;
 
 import com.hs.hstesis.learning.domain.model.commands.CreateAreaCommand;
-import com.hs.hstesis.learning.domain.model.commands.EditAreaNameCommand;
+import com.hs.hstesis.learning.domain.model.commands.UpdateAreaCommand;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -17,13 +17,22 @@ public class Area {
     @Column(nullable = false)
     private String name;
 
-    protected Area() {};
+    @OneToOne(mappedBy = "area", cascade = CascadeType.ALL, orphanRemoval = true)
+    private AreaCoordinator coordinator;
+
+    protected Area() {}
 
     public Area(CreateAreaCommand command){
         this.name = command.name();
     }
 
-    public void editName(EditAreaNameCommand command){
-        this.name = command.newName();
+    public void update(UpdateAreaCommand command){
+        if(command.name() != null){
+            changeName(command.name());
+        }
+    }
+
+    private void changeName(String name){
+        this.name = name;
     }
 }

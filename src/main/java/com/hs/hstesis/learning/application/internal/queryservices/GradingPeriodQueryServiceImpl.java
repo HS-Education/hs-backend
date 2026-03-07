@@ -1,7 +1,6 @@
 package com.hs.hstesis.learning.application.internal.queryservices;
 
 import com.hs.hstesis.learning.domain.model.aggregates.GradingPeriod;
-import com.hs.hstesis.learning.domain.model.queries.GetAllGradingPeriodsQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetGradingPeriodByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetGradingPeriodsByAcademicYearIdQuery;
 import com.hs.hstesis.learning.domain.services.GradingPeriodQueryService;
@@ -22,11 +21,6 @@ public class GradingPeriodQueryServiceImpl implements GradingPeriodQueryService 
     @Override
     public Optional<GradingPeriod> handle(GetGradingPeriodByIdQuery query){
         return gradingPeriodRepository.findById(query.id());
-    }
-
-    @Override
-    public List<GradingPeriod> handle(GetAllGradingPeriodsQuery query) {
-        return gradingPeriodRepository.findAll();
     }
 
     @Override

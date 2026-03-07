@@ -13,10 +13,11 @@ public class JwtConfig {
 
     private static final Dotenv dotenv = Dotenv.configure().load();
 
-    private String secret = dotenv.get("JWT_SECRET");
+    private final String secret = dotenv.get("JWT_SECRET");
 
     @Bean
     public SecretKey signingKey() {
+        assert secret != null;
         byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
     }

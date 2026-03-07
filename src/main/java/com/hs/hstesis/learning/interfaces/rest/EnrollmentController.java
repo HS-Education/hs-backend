@@ -3,14 +3,8 @@ package com.hs.hstesis.learning.interfaces.rest;
 import com.hs.hstesis.learning.domain.model.queries.GetClassroomMembersQuery;
 import com.hs.hstesis.learning.domain.services.EnrollmentCommandService;
 import com.hs.hstesis.learning.domain.services.EnrollmentQueryService;
-import com.hs.hstesis.learning.interfaces.rest.resources.AssignTeacherResource;
-import com.hs.hstesis.learning.interfaces.rest.resources.EnrollStudentsResource;
-import com.hs.hstesis.learning.interfaces.rest.resources.EnrollmentResource;
-import com.hs.hstesis.learning.interfaces.rest.resources.UnassignTeacherResource;
-import com.hs.hstesis.learning.interfaces.rest.transform.AssignTeacherCommandFromResourceAssembler;
-import com.hs.hstesis.learning.interfaces.rest.transform.EnrollStudentsCommandFromResourceAssembler;
-import com.hs.hstesis.learning.interfaces.rest.transform.EnrollmentResourceFromEntityAssembler;
-import com.hs.hstesis.learning.interfaces.rest.transform.UnassignTeacherCommandFromResourceAssembler;
+import com.hs.hstesis.learning.interfaces.rest.resources.*;
+import com.hs.hstesis.learning.interfaces.rest.transform.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -56,6 +50,13 @@ public class EnrollmentController {
                 .toList();
 
         return ResponseEntity.ok(resources);
+    }
+
+    @DeleteMapping("/students/unenroll")
+    public ResponseEntity<?> unenrollUser(@RequestBody UnassignUserResource unassignUserResource) {
+        var unenrollUserCommand = UnenrollUserCommandFromResourceAssembler.toCommandFromResource(unassignUserResource);
+        enrollmentCommandService.handle(unenrollUserCommand);
+        return ResponseEntity.ok("User unenrolled from classroom.");
     }
 
     @DeleteMapping("/teachers/unassign")

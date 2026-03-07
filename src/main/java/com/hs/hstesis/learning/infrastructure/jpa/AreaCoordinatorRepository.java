@@ -9,6 +9,5 @@ public interface AreaCoordinatorRepository extends JpaRepository<AreaCoordinator
     Optional<AreaCoordinator> findByUserId(Long userId);
     Optional<AreaCoordinator> findByAreaId(Long areaId);
     boolean existsByUserIdAndAreaIdNot(Long userId, Long areaId);
-    boolean existsByUserIdAndAreaId(Long userId, Long areaId);
     boolean existsByAreaId(Long areaId);
 }

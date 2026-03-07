@@ -1,7 +1,6 @@
 package com.hs.hstesis.learning.interfaces.rest;
 
 import com.hs.hstesis.learning.domain.model.commands.DeleteGradingPeriodCommand;
-import com.hs.hstesis.learning.domain.model.queries.GetAllGradingPeriodsQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetGradingPeriodByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetGradingPeriodsByAcademicYearIdQuery;
 import com.hs.hstesis.learning.domain.services.GradingPeriodCommandService;
