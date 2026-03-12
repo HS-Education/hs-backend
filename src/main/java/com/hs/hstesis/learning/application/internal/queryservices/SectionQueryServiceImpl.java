@@ -3,7 +3,7 @@ package com.hs.hstesis.learning.application.internal.queryservices;
 import com.hs.hstesis.learning.domain.model.aggregates.Section;
 import com.hs.hstesis.learning.domain.model.queries.GetAllSectionsQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetSectionByIdQuery;
-import com.hs.hstesis.learning.domain.model.queries.GetSectionsByAcademicLevelIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetSectionsByEducationAndGradeLevelQuery;
 import com.hs.hstesis.learning.domain.services.SectionQueryService;
 import com.hs.hstesis.learning.infrastructure.jpa.SectionRepository;
 import org.springframework.stereotype.Service;
@@ -30,7 +30,7 @@ public class SectionQueryServiceImpl implements SectionQueryService {
     }
 
     @Override
-    public List<Section> handle(GetSectionsByAcademicLevelIdQuery query){
-        return sectionRepository.findAllByAcademicLevelId(query.academicLevelId());
+    public List<Section> handle(GetSectionsByEducationAndGradeLevelQuery query){
+        return sectionRepository.findAllByEducationLevelAndGradeLevel(query.educationLevel(), query.gradeLevel());
     }
 }

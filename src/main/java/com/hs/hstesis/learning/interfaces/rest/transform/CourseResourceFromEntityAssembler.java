@@ -9,6 +9,7 @@ public class CourseResourceFromEntityAssembler {
                 entity.getId(),
                 entity.getName(),
                 entity.getArea().getId(),
-                entity.getArea().getName());
+                entity.getArea().getName()
+        );
     }
 }

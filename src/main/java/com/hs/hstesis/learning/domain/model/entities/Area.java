@@ -17,22 +17,30 @@ public class Area {
     @Column(nullable = false)
     private String name;
 
-    @OneToOne(mappedBy = "area", cascade = CascadeType.ALL, orphanRemoval = true)
-    private AreaCoordinator coordinator;
+    @Column(name = "coordinator_id", unique = true)
+    private Long coordinatorId;
 
     protected Area() {}
 
     public Area(CreateAreaCommand command){
-        this.name = command.name();
+        this.name = command.name().toUpperCase().trim();
+        this.coordinatorId = command.coordinatorId();
     }
 
     public void update(UpdateAreaCommand command){
         if(command.name() != null){
-            changeName(command.name());
+            changeName(command.name().toUpperCase().trim());
+        }
+        if(command.coordinatorId() != null){
+            reassignCoordinator(command.coordinatorId());
         }
     }
 
     private void changeName(String name){
         this.name = name;
+    }
+
+    private void reassignCoordinator(Long coordinatorId){
+        this.coordinatorId = coordinatorId;
     }
 }

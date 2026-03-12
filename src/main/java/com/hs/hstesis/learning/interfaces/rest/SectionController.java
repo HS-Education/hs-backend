@@ -3,7 +3,9 @@ package com.hs.hstesis.learning.interfaces.rest;
 import com.hs.hstesis.learning.domain.model.commands.DeleteSectionCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetAllSectionsQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetSectionByIdQuery;
-import com.hs.hstesis.learning.domain.model.queries.GetSectionsByAcademicLevelIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetSectionsByEducationAndGradeLevelQuery;
+import com.hs.hstesis.learning.domain.model.valueobjects.EducationLevel;
+import com.hs.hstesis.learning.domain.model.valueobjects.GradeLevel;
 import com.hs.hstesis.learning.domain.services.SectionCommandService;
 import com.hs.hstesis.learning.domain.services.SectionQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.CreateSectionResource;
@@ -12,14 +14,18 @@ import com.hs.hstesis.learning.interfaces.rest.resources.UpdateSectionResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateSectionCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.SectionResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.UpdateSectionCommandFromResourceAssembler;
+import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping(value = "/api/v1/sections", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Sections", description = "Section management endpoints")
@@ -32,7 +38,8 @@ public class SectionController {
         this.sectionQueryService = sectionQueryService;
     }
 
-    @PostMapping("/create")
+    @Operation(description = "Create a new section.")
+    @PostMapping()
     public ResponseEntity<SectionResource> createSection(@RequestBody CreateSectionResource createSectionResource) {
         var createSectionCommand = CreateSectionCommandFromResourceAssembler.toCommandFromResource(createSectionResource);
         var sectionId = sectionCommandService.handle(createSectionCommand);
@@ -45,13 +52,14 @@ public class SectionController {
         var section = sectionQueryService.handle(getSectionByIdQuery);
 
         if (section.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.badRequest().build();
         }
 
         var sectionResource = SectionResourceFromEntityAssembler.toResourceFromEntity(section.get());
         return new ResponseEntity<>(sectionResource, HttpStatus.CREATED);
     }
 
+    @Operation(description = "Return a list of all sections.")
     @GetMapping
     public ResponseEntity<List<SectionResource>> getAllSections() {
         var getAllSectionsQuery = new GetAllSectionsQuery();
@@ -62,9 +70,13 @@ public class SectionController {
         return ResponseEntity.ok(sectionResources);
     }
 
-    @GetMapping("/{academicLevelId}")
-    public ResponseEntity<List<SectionResource>> getSectionsByAcademicLevelId(@PathVariable Long academicLevelId) {
-        var getSectionsByAcademicLevelIdQuery = new GetSectionsByAcademicLevelIdQuery(academicLevelId);
+    @Operation(description = "Return a list of sections by education level and grade level.")
+    @GetMapping("/filter")
+    public ResponseEntity<List<SectionResource>> getSectionsByEducationAndGradeLevel(
+            @RequestParam EducationLevel educationLevel,
+            @RequestParam GradeLevel gradeLevel
+    ) {
+        var getSectionsByAcademicLevelIdQuery = new GetSectionsByEducationAndGradeLevelQuery(educationLevel, gradeLevel);
         var sections = sectionQueryService.handle(getSectionsByAcademicLevelIdQuery);
         var sectionResources = sections.stream()
                 .map(SectionResourceFromEntityAssembler::toResourceFromEntity)
@@ -72,6 +84,7 @@ public class SectionController {
         return ResponseEntity.ok(sectionResources);
     }
 
+    @Operation(description = "Update the details of an existing section.")
     @PatchMapping("/{sectionId}")
     public ResponseEntity<SectionResource> updateSection(@PathVariable Long sectionId, @RequestBody UpdateSectionResource updateSectionResource) {
         var updateSectionCommand = UpdateSectionCommandFromResourceAssembler.toCommandFromResource(sectionId, updateSectionResource);
@@ -85,10 +98,11 @@ public class SectionController {
         return ResponseEntity.ok(sectionResource);
     }
 
+    @Operation(description = "Delete an existing section.")
     @DeleteMapping("/{sectionId}")
-    public ResponseEntity<?> deleteSection(@PathVariable Long sectionId) {
+    public ResponseEntity<MessageResource> deleteSection(@PathVariable Long sectionId) {
         var deleteSectionCommand = new DeleteSectionCommand(sectionId);
         sectionCommandService.handle(deleteSectionCommand);
-        return ResponseEntity.ok("Section deleted successfully");
+        return ResponseEntity.ok(new MessageResource("Section deleted successfully."));
     }
 }

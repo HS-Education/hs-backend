@@ -1,12 +1,17 @@
 package com.hs.hstesis.learning.application.internal.commandservices;
 
+import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
 import com.hs.hstesis.learning.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.model.commands.CreateAreaCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAreaCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateAreaCommand;
 import com.hs.hstesis.learning.domain.model.entities.Area;
+import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
 import com.hs.hstesis.learning.domain.services.AreaCommandService;
+import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.AreaRepository;
+import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
+import com.hs.hstesis.shared.domain.model.util.TextUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -14,16 +19,33 @@ import java.util.Optional;
 @Service
 public class AreaCommandServiceImpl implements AreaCommandService {
     private final AreaRepository areaRepository;
+    private final UserRepository userRepository;
+    private final CourseRepository courseRepository;
 
-    public AreaCommandServiceImpl(AreaRepository areaRepository) {
+    public AreaCommandServiceImpl(AreaRepository areaRepository,
+                                  UserRepository userRepository,
+                                  CourseRepository courseRepository) {
         this.areaRepository = areaRepository;
+        this.userRepository = userRepository;
+        this.courseRepository = courseRepository;
     }
 
     @Override
     public Long handle(CreateAreaCommand command){
-        if(areaRepository.existsByName(command.name())){
-            throw new AreaNameAlreadyExistsException(command.name());
+
+        String nameToCreate = TextUtils.normalize(command.name());
+
+        boolean alreadyExists = areaRepository.findAll().stream()
+                .anyMatch(a -> TextUtils.normalize(a.getName()).equals(nameToCreate));
+
+        if (alreadyExists) {
+            throw new AreaNameAlreadyExistsException(nameToCreate);
         }
+
+        if (command.coordinatorId() != null) {
+            validateCoordinator(command.coordinatorId(), null);
+        }
+
         var area = new Area(command);
         areaRepository.save(area);
         return area.getId();
@@ -34,8 +56,22 @@ public class AreaCommandServiceImpl implements AreaCommandService {
         var area = areaRepository.findById(command.id())
                 .orElseThrow(() -> new AreaNotFoundException(command.id()));
 
-        if (command.name() != null && areaRepository.existsByName(command.name())) {
-            throw new AreaNameAlreadyExistsException(command.name());
+        if (command.name() != null) {
+            String newNormalizedName = TextUtils.normalize(command.name());
+            String currentNormalizedName = TextUtils.normalize(area.getName());
+
+            if (!newNormalizedName.equals(currentNormalizedName)) {
+                boolean alreadyExists = areaRepository.findAll().stream()
+                        .anyMatch(a -> TextUtils.normalize(a.getName()).equals(newNormalizedName));
+
+                if (alreadyExists) {
+                    throw new AreaNameAlreadyExistsException(newNormalizedName);
+                }
+            }
+        }
+
+        if (command.coordinatorId() != null) {
+            validateCoordinator(command.coordinatorId(), area.getId());
         }
 
         area.update(command);
@@ -45,9 +81,31 @@ public class AreaCommandServiceImpl implements AreaCommandService {
 
     @Override
     public void handle(DeleteAreaCommand command){
-        if (!areaRepository.existsById(command.id())) {
-            throw new AreaNotFoundException(command.id());
+        var area = areaRepository.findById(command.id())
+                .orElseThrow(() -> new AreaNotFoundException(command.id()));
+
+        if (courseRepository.existsByAreaId(area.getId())) {
+            throw new AreaRelatedToCoursesException(area.getName());
         }
+
         areaRepository.deleteById(command.id());
+    }
+
+    private void validateCoordinator(Long userId, Long currentAreaId) {
+        var user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        boolean hasCoordinatorRole = user.getRoles().stream()
+                .anyMatch(role -> role.getRoleName().equals("COORDINATOR"));
+
+        if (!hasCoordinatorRole) {
+            throw new UserIsNotACoordinatorException(user.getName());
+        }
+
+        areaRepository.findByCoordinatorId(userId).ifPresent(existingArea -> {
+            if (!existingArea.getId().equals(currentAreaId)) {
+                throw new UserAlreadyIsACoordinatorException(user.getName(), existingArea.getName());
+            }
+        });
     }
 }

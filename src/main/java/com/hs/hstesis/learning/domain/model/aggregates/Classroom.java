@@ -1,6 +1,8 @@
 package com.hs.hstesis.learning.domain.model.aggregates;
 
 import com.hs.hstesis.learning.domain.model.entities.AcademicYear;
+import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
+import com.hs.hstesis.learning.domain.model.valueobjects.ClassroomStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -31,15 +33,19 @@ public class Classroom {
     @JoinColumn(name = "academic_year_id", nullable = false)
     private AcademicYear academicYear;
 
-    @Column(nullable = false)
-    private Boolean isActive;
-
     protected Classroom() {}
 
     public Classroom(Course course, Section section, AcademicYear academicYear) {
         this.course = course;
         this.section = section;
         this.academicYear = academicYear;
-        this.isActive = false;
+    }
+
+    public ClassroomStatus getStatus() {
+        if (academicYear.getStatus() == AcademicYearStatus.ACTIVE) {
+            return ClassroomStatus.ACTIVE;
+        }
+
+        return ClassroomStatus.INACTIVE;
     }
 }

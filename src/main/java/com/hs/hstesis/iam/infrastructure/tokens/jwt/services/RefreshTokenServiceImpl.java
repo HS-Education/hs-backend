@@ -20,7 +20,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
     private final Dotenv dotenv = Dotenv.configure().load();
 
-    private final Long refreshTokenDurationMs = Long.parseLong(Objects.requireNonNull(dotenv.get("JWT_REFRESH_EXPIRATION_MS")));
+    private final Long refreshTokenDurationMs = Long.parseLong(Objects.requireNonNull(dotenv.get("JWT_REFRESH_EXPIRATION_DAYS"))) * 24 * 60 * 60 * 1000;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;

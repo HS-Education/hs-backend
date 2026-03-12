@@ -31,19 +31,19 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
     @Override
     @Transactional
     public void handle(EnrollStudentsToAcademicLevelCommand command){
-        var classrooms = classroomRepository.findAllBySectionAcademicLevelIdAndAcademicYearId(
-                command.academicLevelId(), command.academicYearId());
-
-        var students = userRepository.findAllById(command.studentIds());
-
-        for (var student : students) {
-            for (var classroom : classrooms) {
-                if (!enrollmentRepository.existsByUserIdAndClassroomId(student.getId(), classroom.getId())) {
-                    var enrollment = new Enrollment(student, classroom, "STUDENT");
-                    enrollmentRepository.save(enrollment);
-                }
-            }
-        }
+//        var classrooms = classroomRepository.findAllBySectionAcademicLevelIdAndAcademicYearId(
+//                command.academicLevelId(), command.academicYearId());
+//
+//        var students = userRepository.findAllById(command.studentIds());
+//
+//        for (var student : students) {
+//            for (var classroom : classrooms) {
+//                if (!enrollmentRepository.existsByUserIdAndClassroomId(student.getId(), classroom.getId())) {
+//                    var enrollment = new Enrollment(student, classroom, "STUDENT");
+//                    enrollmentRepository.save(enrollment);
+//                }
+//            }
+//        }
     }
 
     @Override

@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -18,10 +19,12 @@ public class GlobalExceptionHandler {
 
     // --- BAD REQUEST (400) ---
     @ExceptionHandler({
-            DateInPastException.class,
-            DateYearMismatchException.class,
-            InvalidAreaNameException.class,
-            InvalidCourseNameException.class
+            ClassroomGenerationDeadlineExceededException.class,
+            FinishedGradingPeriodModificationException.class,
+            GradingPeriodDurationTooShortException.class,
+            GradingPeriodInPastException.class,
+            InvalidGradingPeriodYearException.class,
+            StartedGradingPeriodModificationException.class,
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException ex) {
         logger.error("Bad Request: {}", ex.getMessage());
@@ -59,7 +62,6 @@ public class GlobalExceptionHandler {
 
     // --- NOT FOUND (404) ---
     @ExceptionHandler({
-            AcademicLevelNotFoundException.class,
             AcademicYearNotFoundException.class,
             AreaNotFoundException.class,
             ClassroomNotFoundException.class,
@@ -84,23 +86,25 @@ public class GlobalExceptionHandler {
 
     // --- CONFLICT (409) ---
     @ExceptionHandler({
-            AcademicLevelNameAlreadyExistsException.class,
-            AcademicLevelRelatedToSectionsException.class,
+            AreaRelatedToCoursesException.class,
             AcademicYearAlreadyExistsException.class,
             AcademicYearCannotBeClosedException.class,
             AcademicYearIsActiveException.class,
-            AreaAlreadyHasCoordinatorException.class,
             AreaNameAlreadyExistsException.class,
             BimesterAlreadyExistsInAcademicYearException.class,
             CannotDeleteActiveClassroomException.class,
             CannotDeleteHistoricalDataException.class,
-            CourseNameAlreadyExistsInAreaException.class,
+            CourseNameAlreadyException.class,
             CourseAlreadyInStudyPlanException.class,
             GradingPeriodOverlapException.class,
             IncompleteAcademicYearException.class,
             InvalidGradingPeriodDeleteException.class,
             NoActiveAcademicYearException.class,
-            SectionNameAlreadyExistsInAcademicLevelException.class
+            SectionNameAlreadyExistsInAcademicLevelException.class,
+            UserAlreadyIsACoordinatorException.class,
+            UserIsNotACoordinatorException.class,
+            BimesterSequencePredecessorException.class,
+            BimesterSequenceSuccessorException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());
@@ -122,5 +126,27 @@ public class GlobalExceptionHandler {
                 "An unexpected error occurred. Please contact support."
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        logger.error("Validation Error: {}", ex.getMessage());
+        var errorResponse = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Invalid Argument",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        logger.error("Malformed JSON Request: {}", ex.getMessage());
+        var errorResponse = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Malformed JSON",
+                "The request body contains invalid JSON syntax"
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 }

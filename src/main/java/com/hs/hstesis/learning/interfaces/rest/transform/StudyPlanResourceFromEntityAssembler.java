@@ -7,8 +7,8 @@ public class StudyPlanResourceFromEntityAssembler {
     public static StudyPlanResource toResourceFromEntity(StudyPlan entity) {
         return new StudyPlanResource(
                 entity.getId(),
-                entity.getAcademicLevel().getId(),
-                entity.getAcademicLevel().getName(),
+                entity.getEducationLevel(),
+                entity.getGradeLevel(),
                 entity.getCourse().getId(),
                 entity.getCourse().getName()
         );

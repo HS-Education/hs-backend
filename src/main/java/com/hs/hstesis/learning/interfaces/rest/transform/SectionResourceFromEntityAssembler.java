@@ -8,8 +8,8 @@ public class SectionResourceFromEntityAssembler {
         return new SectionResource(
                 entity.getId(),
                 entity.getName(),
-                entity.getAcademicLevel().getId(),
-                entity.getAcademicLevel().getName()
+                entity.getEducationLevel(),
+                entity.getGradeLevel()
         );
     }
 }

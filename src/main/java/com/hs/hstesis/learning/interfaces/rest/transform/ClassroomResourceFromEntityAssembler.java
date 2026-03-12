@@ -9,11 +9,10 @@ public class ClassroomResourceFromEntityAssembler {
                 entity.getId(),
                 entity.getCourse().getId(),
                 entity.getCourse().getName(),
-                entity.getSection().getId(),
-                entity.getSection().getName(),
+                SectionResourceFromEntityAssembler.toResourceFromEntity(entity.getSection()),
                 entity.getAcademicYear().getId(),
-                entity.getAcademicYear().getYear().toString(),
-                entity.getIsActive()
+                entity.getAcademicYear().getYear(),
+                entity.getStatus()
         );
     }
 }

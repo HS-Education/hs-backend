@@ -1,8 +1,8 @@
 package com.hs.hstesis.learning.application.internal.queryservices;
 
 import com.hs.hstesis.learning.domain.model.aggregates.StudyPlan;
-import com.hs.hstesis.learning.domain.model.queries.GetStudyPlanByAcademicLevelIdAndCourseIdQuery;
-import com.hs.hstesis.learning.domain.model.queries.GetStudyPlanByAcademicLevelIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetStudyPlanByEducationLevelAndGradeLevelAndCourseIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetStudyPlanByEducationLevelAndGradeLevelQuery;
 import com.hs.hstesis.learning.domain.services.StudyPlanQueryService;
 import com.hs.hstesis.learning.infrastructure.jpa.StudyPlanRepository;
 import org.springframework.stereotype.Service;
@@ -19,12 +19,12 @@ public class StudyPlanQueryServiceImpl implements StudyPlanQueryService {
     }
 
     @Override
-    public List<StudyPlan> handle(GetStudyPlanByAcademicLevelIdQuery query) {
-        return studyPlanRepository.findAllByAcademicLevelId(query.academicLevelId());
+    public List<StudyPlan> handle(GetStudyPlanByEducationLevelAndGradeLevelQuery query) {
+        return studyPlanRepository.findAllByEducationLevelAndGradeLevel(query.educationLevel(), query.gradeLevel());
     }
 
     @Override
-    public Optional<StudyPlan> handle(GetStudyPlanByAcademicLevelIdAndCourseIdQuery query) {
-        return studyPlanRepository.findByAcademicLevelIdAndCourseId(query.academicLevelId(), query.courseId());
+    public Optional<StudyPlan> handle(GetStudyPlanByEducationLevelAndGradeLevelAndCourseIdQuery query) {
+        return studyPlanRepository.findByEducationLevelAndGradeLevelAndCourseId(query.educationLevel(), query.gradeLevel(), query.courseId());
     }
 }

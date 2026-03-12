@@ -8,11 +8,11 @@ public class GradingPeriodResourceFromEntityAssembler {
         return new GradingPeriodResource(
                 entity.getId(),
                 entity.getAcademicYear().getId(),
-                entity.getAcademicYear().getYear().toString(),
+                entity.getAcademicYear().getYear(),
                 entity.getBimester(),
-                entity.getStartDate().toString(),
-                entity.getEndDate().toString(),
-                entity.getIsActive()
+                entity.getStartDate(),
+                entity.getEndDate(),
+                entity.getStatus()
         );
     }
 }

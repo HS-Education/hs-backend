@@ -2,8 +2,8 @@ package com.hs.hstesis.learning.domain.model.queries;
 
 public record GetClassroomsByUserIdQuery(Long userId) {
     public GetClassroomsByUserIdQuery {
-        if (userId == null) {
-            throw new IllegalArgumentException("User ID cannot be null");
+        if (userId == null || userId <= 0) {
+            throw new IllegalArgumentException("User id cannot be null or negative");
         }
     }
 }

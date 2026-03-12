@@ -1,5 +1,7 @@
 package com.hs.hstesis.learning.interfaces.rest;
 
+import com.hs.hstesis.iam.domain.model.queries.GetUserNameByIdQuery;
+import com.hs.hstesis.iam.domain.services.UserQueryService;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAreaCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetAllAreasQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetAreaByIdQuery;
@@ -11,6 +13,8 @@ import com.hs.hstesis.learning.interfaces.rest.resources.UpdateAreaResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.AreaResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateAreaCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.UpdateAreaCommandFromResourceAssembler;
+import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -27,60 +31,90 @@ import java.util.List;
 public class AreaController {
     private final AreaCommandService areaCommandService;
     private final AreaQueryService areaQueryService;
+    private final UserQueryService userQueryService;
 
-    public AreaController(AreaCommandService areaCommandService, AreaQueryService areaQueryService) {
+    public AreaController(AreaCommandService areaCommandService,
+                          AreaQueryService areaQueryService,
+                          UserQueryService userQueryService) {
         this.areaCommandService = areaCommandService;
         this.areaQueryService = areaQueryService;
+        this.userQueryService = userQueryService;
     }
 
-    @PostMapping("/create")
+    @Operation(description = "Creates a new area.")
+    @PostMapping
     public ResponseEntity<AreaResource> createArea(@RequestBody CreateAreaResource createAreaResource) {
+
         var createAreaCommand = CreateAreaCommandFromResourceAssembler.toCommandFromResource(createAreaResource);
         var areaId = areaCommandService.handle(createAreaCommand);
 
-        if (areaId == 0L) {
+        if(areaId == 0L) {
             return ResponseEntity.badRequest().build();
         }
 
         var getAreaByIdQuery = new GetAreaByIdQuery(areaId);
         var area = areaQueryService.handle(getAreaByIdQuery);
 
-        if (area.isEmpty()) {
+        if(area.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
 
-        var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(area.get());
+        var getUsernameByIdQuery = new GetUserNameByIdQuery(createAreaResource.coordinatorId());
+        var coordinatorUsername = userQueryService.handle(getUsernameByIdQuery);
+
+        if(coordinatorUsername.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(area.get(), coordinatorUsername.get());
         return new ResponseEntity<>(areaResource, HttpStatus.CREATED);
     }
 
+    @Operation(description = "Returns a list of all areas.")
     @GetMapping
     public ResponseEntity<List<AreaResource>> getAllAreas() {
         var getAllAreasQuery = new GetAllAreasQuery();
         var areas = areaQueryService.handle(getAllAreasQuery);
+
         var areaResources = areas.stream()
-                .map(AreaResourceFromEntityAssembler::toResourceFromEntity)
+                .map(area -> {
+                    var getUsernameByIdQuery = new GetUserNameByIdQuery(area.getCoordinatorId());
+                    var coordinatorUsername = userQueryService.handle(getUsernameByIdQuery)
+                            .orElse("Unknown");
+                    return AreaResourceFromEntityAssembler.toResourceFromEntity(area, coordinatorUsername);
+                })
                 .toList();
         return ResponseEntity.ok(areaResources);
     }
 
+    @Operation(description = "Updates the details of an existing area.")
     @PatchMapping("/{areaId}")
     public ResponseEntity<AreaResource> updateArea(@PathVariable Long areaId, @RequestBody UpdateAreaResource updateAreaResource) {
 
         var updateAreaCommand = UpdateAreaCommandFromResourceAssembler.toCommandFromResource(areaId, updateAreaResource);
         var updatedArea = areaCommandService.handle(updateAreaCommand);
 
-        if(updatedArea.isEmpty()){
+        if(updatedArea.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
 
-        var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(updatedArea.get());
+        var getUsernameByIdQuery = new GetUserNameByIdQuery(updatedArea.get().getCoordinatorId());
+        var coordinatorUsername = userQueryService.handle(getUsernameByIdQuery);
+
+        if(coordinatorUsername.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(updatedArea.get(), coordinatorUsername.get());
         return ResponseEntity.ok(areaResource);
     }
 
+    @Operation(description = "Deletes an existing area. It must not have related courses.")
     @DeleteMapping("/{areaId}")
-    public ResponseEntity<?> deleteArea(@PathVariable Long areaId) {
+    public ResponseEntity<MessageResource> deleteArea(@PathVariable Long areaId) {
+
         var deleteAreaCommand = new DeleteAreaCommand(areaId);
         areaCommandService.handle(deleteAreaCommand);
-        return ResponseEntity.ok("Area deleted successfully");
+        return ResponseEntity.ok(new MessageResource("Area deleted successfully"));
     }
 }

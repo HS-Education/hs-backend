@@ -2,107 +2,104 @@ package com.hs.hstesis.learning.application.internal.commandservices;
 
 import com.hs.hstesis.learning.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.model.aggregates.GradingPeriod;
-import com.hs.hstesis.learning.domain.model.commands.CreateGradingPeriodCommand;
-import com.hs.hstesis.learning.domain.model.commands.DeleteGradingPeriodCommand;
+import com.hs.hstesis.learning.domain.model.commands.UpdateGradingPeriodCommand;
+import com.hs.hstesis.learning.domain.model.valueobjects.GradingPeriodStatus;
 import com.hs.hstesis.learning.domain.services.GradingPeriodCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
-import com.hs.hstesis.learning.infrastructure.jpa.ClassroomRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.GradingPeriodRepository;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class GradingPeriodCommandServiceImpl implements GradingPeriodCommandService {
     private final GradingPeriodRepository gradingPeriodRepository;
-    private final AcademicYearRepository academicYearRepository;
-    private final ClassroomRepository classroomRepository;
 
-    public GradingPeriodCommandServiceImpl(GradingPeriodRepository gradingPeriodRepository,
-                                           AcademicYearRepository academicYearRepository,
-                                           ClassroomRepository classroomRepository) {
+    public GradingPeriodCommandServiceImpl(GradingPeriodRepository gradingPeriodRepository) {
         this.gradingPeriodRepository = gradingPeriodRepository;
-        this.academicYearRepository = academicYearRepository;
-        this.classroomRepository = classroomRepository;
     }
 
     @Override
-    public Long handle(CreateGradingPeriodCommand command) {
-        if (command.startDate().isBefore(LocalDate.now())) {
-            throw new DateInPastException(command.startDate());
+    @Transactional
+    public Optional<GradingPeriod> handle(UpdateGradingPeriodCommand command) {
+        var period = gradingPeriodRepository
+                .findByIdAndAcademicYearId(command.gradingPeriodId(), command.academicYearId())
+                .orElseThrow(() -> new GradingPeriodNotFoundException(command.gradingPeriodId()));
+
+        LocalDate today = LocalDate.now();
+        int currentYear = today.getYear();
+
+        if (period.getStatus() == GradingPeriodStatus.FINISHED) {
+            throw new FinishedGradingPeriodModificationException(period.getBimester().getValue());
         }
 
-        var academicYear = academicYearRepository.findById(command.academicYearId())
-                .orElseThrow(() -> new AcademicYearNotFoundException(command.academicYearId()));
-
-        int yearValue = academicYear.getYear();
-        if (command.startDate().getYear() != yearValue || command.endDate().getYear() != yearValue) {
-            throw new DateYearMismatchException(command.startDate(), yearValue);
+        if (period.getStatus() == GradingPeriodStatus.ACTIVE) {
+            if (!command.startDate().equals(period.getStartDate())) {
+                throw new StartedGradingPeriodModificationException(period.getBimester().getValue());
+            }
         }
 
-        if (gradingPeriodRepository.existsByBimesterAndAcademicYearId(command.bimester(), command.academicYearId())){
-            throw new BimesterAlreadyExistsInAcademicYearException(command.bimester(), command.academicYearId());
+        if (period.getStartDate() == null) {
+            if (command.startDate().isBefore(today)) {
+                throw new GradingPeriodInPastException();
+            }
         }
 
-        List<GradingPeriod> existingPeriods = gradingPeriodRepository.findAllByAcademicYearId(command.academicYearId());
-        for (GradingPeriod period : existingPeriods) {
-            boolean isOverlapping = command.startDate().isBefore(period.getEndDate().plusDays(1)) &&
-                    command.endDate().isAfter(period.getStartDate().minusDays(1));
+        if (command.startDate().getYear() != currentYear || command.endDate().getYear() != currentYear) {
+            throw new InvalidGradingPeriodYearException(currentYear);
+        }
+
+        long weeks = ChronoUnit.WEEKS.between(command.startDate(), command.endDate());
+        if (weeks < 7) {
+            throw new GradingPeriodDurationTooShortException(weeks);
+        }
+
+        List<GradingPeriod> otherPeriods = gradingPeriodRepository
+                .findAllByAcademicYearId(period.getAcademicYear().getId())
+                .stream()
+                .filter(p -> !p.getId().equals(period.getId()))
+                .filter(p -> p.getStartDate() != null && p.getEndDate() != null)
+                .toList();
+
+        for (GradingPeriod other : otherPeriods) {
+
+            if (other == null || other.getStartDate() == null || other.getEndDate() == null) {
+                continue;
+            }
+
+            int currentBimesterValue = period.getBimester().getValue();
+            int otherBimesterValue = other.getBimester().getValue();
+
+            if (otherBimesterValue < currentBimesterValue) {
+                if (!command.startDate().isAfter(other.getEndDate())) {
+                    throw new BimesterSequencePredecessorException(currentBimesterValue, otherBimesterValue, other.getEndDate());
+                }
+            }
+
+            if (otherBimesterValue > currentBimesterValue) {
+                if (!command.endDate().isBefore(other.getStartDate())) {
+                    throw new BimesterSequenceSuccessorException(currentBimesterValue, otherBimesterValue, other.getStartDate());
+                }
+            }
+
+            boolean isOverlapping =
+                    !command.endDate().isBefore(other.getStartDate()) &&
+                            !command.startDate().isAfter(other.getEndDate());
 
             if (isOverlapping) {
-                throw new GradingPeriodOverlapException(period.getBimester(), period.getStartDate(), period.getEndDate());
+                throw new GradingPeriodOverlapException(
+                        other.getBimester(),
+                        other.getStartDate(),
+                        other.getEndDate()
+                );
             }
         }
 
-        var gradingPeriod = new GradingPeriod(command, academicYear);
-        gradingPeriodRepository.save(gradingPeriod);
-        return gradingPeriod.getId();
-    }
-
-    @Override
-    public void handle(DeleteGradingPeriodCommand command){
-        var gradingPeriod = gradingPeriodRepository.findById(command.id())
-                .orElseThrow(() -> new GradingPeriodNotFoundException(command.id()));
-        if(!gradingPeriod.getStartDate().isAfter(LocalDate.now())){
-            String yearName = gradingPeriod.getAcademicYear().getYear().toString();
-            throw new InvalidGradingPeriodDeleteException(gradingPeriod.getBimester(), yearName);
-        }
-        gradingPeriodRepository.delete(gradingPeriod);
-    }
-
-    @Override
-    @Scheduled(cron = "0 0 0 * * *")
-    @Transactional
-    public void refreshPeriodsStatus() {
-        LocalDate today = LocalDate.now();
-
-        var activeYear = academicYearRepository.findByIsActiveTrue()
-                .orElse(null);
-
-        if (activeYear != null) {
-
-            if (today.getYear() > activeYear.getYear()) {
-                activeYear.setIsActive(false);
-                academicYearRepository.save(activeYear);
-                return;
-            }
-
-            List<GradingPeriod> periods = gradingPeriodRepository.findAllByAcademicYearId(activeYear.getId());
-            for (GradingPeriod period : periods) {
-                boolean wasActive = period.getIsActive();
-                period.updateStatusBasedOnDate(today);
-
-                if (!wasActive && period.getIsActive() && period.getBimester() == 1) {
-                    classroomRepository.activateAllByAcademicYearId(activeYear.getId());
-                }
-
-                if (period.getBimester() == 4 && today.isEqual(period.getEndDate().plusDays(1))) {
-                    classroomRepository.updateIsActiveByAcademicYearId(activeYear.getId(), false);
-                }
-            }
-        }
+        period.configureDates(command.startDate(), command.endDate());
+        gradingPeriodRepository.save(period);
+        return Optional.of(period);
     }
 }

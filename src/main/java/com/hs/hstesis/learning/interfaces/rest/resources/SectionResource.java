@@ -1,4 +1,11 @@
 package com.hs.hstesis.learning.interfaces.rest.resources;
 
-public record SectionResource(Long id, String name, Long academicLevelId, String academicLevelName) {
-}
+import com.hs.hstesis.learning.domain.model.valueobjects.EducationLevel;
+import com.hs.hstesis.learning.domain.model.valueobjects.GradeLevel;
+
+public record SectionResource(
+        Long id,
+        String name,
+        EducationLevel educationLevel,
+        GradeLevel gradeLevel
+) {}

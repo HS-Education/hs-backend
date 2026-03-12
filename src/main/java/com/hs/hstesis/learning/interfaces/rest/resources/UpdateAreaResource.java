@@ -1,3 +1,3 @@
 package com.hs.hstesis.learning.interfaces.rest.resources;
 
-public record UpdateAreaResource(String name) {}
+public record UpdateAreaResource(String name, Long coordinatorId) {}

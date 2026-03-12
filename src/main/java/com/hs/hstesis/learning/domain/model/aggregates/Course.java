@@ -26,13 +26,13 @@ public class Course {
     protected Course() {}
 
     public Course(CreateCourseCommand command, Area area) {
-        this.name = command.name();
+        this.name = command.name().toUpperCase().trim();
         this.area = area;
     }
 
     public void update(UpdateCourseCommand command) {
         if(command.name() != null) {
-            changeName(command.name());
+            changeName(command.name().toUpperCase().trim());
         }
     }
 

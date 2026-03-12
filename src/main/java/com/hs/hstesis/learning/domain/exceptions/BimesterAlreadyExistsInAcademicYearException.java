@@ -1,7 +1,9 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
+import com.hs.hstesis.learning.domain.model.valueobjects.Bimester;
+
 public class BimesterAlreadyExistsInAcademicYearException extends RuntimeException {
-    public BimesterAlreadyExistsInAcademicYearException(Integer bimester, Long academicYearId) {
-        super(String.format("Bimester '%d' already exists in academic year '%d'.", bimester, academicYearId));
+    public BimesterAlreadyExistsInAcademicYearException(Bimester bimester, Integer year) {
+        super(String.format("Bimester '%s' already exists in academic year '%d'.", bimester, year));
     }
 }

@@ -1,4 +1,11 @@
 package com.hs.hstesis.learning.interfaces.rest.resources;
 
-public record StudyPlanResource(Long id, Long academicLevelId, String academicLevelName, Long courseId, String courseName) {
+import com.hs.hstesis.learning.domain.model.valueobjects.EducationLevel;
+import com.hs.hstesis.learning.domain.model.valueobjects.GradeLevel;
+
+public record StudyPlanResource(Long id,
+                                EducationLevel educationLevel,
+                                GradeLevel gradeLevel,
+                                Long courseId,
+                                String courseName) {
 }

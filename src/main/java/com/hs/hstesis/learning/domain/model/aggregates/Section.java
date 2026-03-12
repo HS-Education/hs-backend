@@ -2,12 +2,18 @@ package com.hs.hstesis.learning.domain.model.aggregates;
 
 import com.hs.hstesis.learning.domain.model.commands.CreateSectionCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateSectionCommand;
-import com.hs.hstesis.learning.domain.model.entities.AcademicLevel;
+import com.hs.hstesis.learning.domain.model.valueobjects.EducationLevel;
+import com.hs.hstesis.learning.domain.model.valueobjects.GradeLevel;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 
 @Entity
+@Table(
+        uniqueConstraints = @UniqueConstraint(
+                columnNames = {"education_level", "grade_level", "name"}
+        )
+)
 @Setter
 @Getter
 public class Section {
@@ -19,20 +25,25 @@ public class Section {
     @Column(nullable = false)
     private String name;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "academic_level_id", nullable = false)
-    private AcademicLevel academicLevel;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EducationLevel educationLevel;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private GradeLevel gradeLevel;
 
     protected Section() {}
 
-    public Section(CreateSectionCommand command, AcademicLevel academicLevel){
-        this.name = command.name();
-        this.academicLevel = academicLevel;
+    public Section(CreateSectionCommand command) {
+        this.name = command.name().toUpperCase().trim();
+        this.educationLevel = command.educationLevel();
+        this.gradeLevel = command.gradeLevel();
     }
 
     public void update(UpdateSectionCommand command) {
         if (command.name() != null) {
-            changeName(command.name());
+            changeName(command.name().toUpperCase().trim());
         }
     }
 

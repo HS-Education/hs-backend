@@ -7,7 +7,8 @@ public class CreateSectionCommandFromResourceAssembler {
     public static CreateSectionCommand toCommandFromResource(CreateSectionResource resource){
         return new CreateSectionCommand(
                 resource.name(),
-                resource.academicLevelId()
+                resource.educationLevel(),
+                resource.gradeLevel()
         );
     }
 }

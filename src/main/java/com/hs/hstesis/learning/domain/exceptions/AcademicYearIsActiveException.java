@@ -1,7 +1,7 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
 public class AcademicYearIsActiveException extends RuntimeException {
-    public AcademicYearIsActiveException(Integer year) {
-        super(String.format("Academic year '%d' cannot be deleted because it is active.", year));
+    public AcademicYearIsActiveException() {
+        super("Operation cannot be performed because the academic year is currently active.");
     }
 }

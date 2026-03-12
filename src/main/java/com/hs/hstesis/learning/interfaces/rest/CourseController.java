@@ -12,14 +12,18 @@ import com.hs.hstesis.learning.interfaces.rest.resources.UpdateCourseResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.CourseResourceFromEntityAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateCourseCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.UpdateCourseCommandFromResourceAssembler;
+import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping(value = "/api/v1/courses", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Courses", description = "Course management endpoints")
@@ -32,7 +36,8 @@ public class CourseController {
         this.courseQueryService = courseQueryService;
     }
 
-    @PostMapping("/create")
+    @Operation(description = "Create a new course.")
+    @PostMapping()
     public ResponseEntity<CourseResource> createCourse(@RequestBody CreateCourseResource createCourseResource){
         var createCourseCommand = CreateCourseCommandFromResourceAssembler.toCommandFromResource(createCourseResource);
         var courseId = courseCommandService.handle(createCourseCommand);
@@ -45,13 +50,14 @@ public class CourseController {
         var course = courseQueryService.handle(getCourseByIdQuery);
 
         if (course.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.badRequest().build();
         }
 
         var courseResource = CourseResourceFromEntityAssembler.toResourceFromEntity(course.get());
         return new ResponseEntity<>(courseResource, HttpStatus.CREATED);
     }
 
+    @Operation(description = "Return a list of all courses.")
     @GetMapping
     public ResponseEntity<List<CourseResource>> getAllCourses() {
         var getAllCoursesQuery = new GetAllCoursesQuery();
@@ -62,16 +68,23 @@ public class CourseController {
         return ResponseEntity.ok(courseResources);
     }
 
+    @Operation(description = "Return a list of courses by area id.")
     @GetMapping("/{areaId}")
     public ResponseEntity<List<CourseResource>> getCoursesByAreaId(@PathVariable Long areaId){
         var getCoursesByAreaIdQuery = new GetCoursesByAreaIdQuery(areaId);
         var courses = courseQueryService.handle(getCoursesByAreaIdQuery);
+
+        if(courses.isEmpty()){
+            return ResponseEntity.badRequest().build();
+        }
+
         var courseResources = courses.stream()
                 .map(CourseResourceFromEntityAssembler::toResourceFromEntity)
                 .toList();
         return ResponseEntity.ok(courseResources);
     }
 
+    @Operation(description = "Updates the details of an existing course.")
     @PatchMapping("/{courseId}")
     public ResponseEntity<CourseResource> updateCourse(@PathVariable Long courseId, @RequestBody UpdateCourseResource updateCourseResource) {
         var updateCourseCommand = UpdateCourseCommandFromResourceAssembler.toCommandFromResource(courseId, updateCourseResource);
@@ -85,10 +98,11 @@ public class CourseController {
         return ResponseEntity.ok(courseResource);
     }
 
+    @Operation(description = "Deletes an existing course.")
     @DeleteMapping("/{courseId}")
-    public ResponseEntity<?> deleteCourse(@PathVariable Long courseId) {
+    public ResponseEntity<MessageResource> deleteCourse(@PathVariable Long courseId) {
         var deleteCourseCommand = new DeleteCourseCommand(courseId);
         courseCommandService.handle(deleteCourseCommand);
-        return ResponseEntity.ok("Course deleted successfully");
+        return ResponseEntity.ok(new MessageResource("Course deleted successfully."));
     }
 }

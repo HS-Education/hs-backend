@@ -5,6 +5,6 @@ import com.hs.hstesis.learning.interfaces.rest.resources.CreateAreaResource;
 
 public class CreateAreaCommandFromResourceAssembler {
     public static CreateAreaCommand toCommandFromResource(CreateAreaResource resource) {
-        return new CreateAreaCommand(resource.name());
+        return new CreateAreaCommand(resource.name(), resource.coordinatorId());
     }
 }

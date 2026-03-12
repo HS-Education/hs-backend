@@ -1,4 +1,8 @@
 package com.hs.hstesis.learning.interfaces.rest.resources;
 
-public record AcademicYearResource(Long id, Integer year, boolean isActive) {
+import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
+
+public record AcademicYearResource(Long id,
+                                   Integer year,
+                                   AcademicYearStatus status) {
 }

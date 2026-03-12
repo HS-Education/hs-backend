@@ -1,11 +1,12 @@
 package com.hs.hstesis.learning.interfaces.rest.resources;
 
+import com.hs.hstesis.learning.domain.model.valueobjects.ClassroomStatus;
+
 public record ClassroomResource(Long id,
                                 Long courseId,
                                 String courseName,
-                                Long sectionId,
-                                String sectionName,
+                                SectionResource sectionResource,
                                 Long academicYearId,
-                                String academicYearName,
-                                Boolean isActive) {
+                                Integer academicYearName,
+                                ClassroomStatus status) {
 }

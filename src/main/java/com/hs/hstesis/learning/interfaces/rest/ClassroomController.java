@@ -8,10 +8,13 @@ import com.hs.hstesis.learning.domain.services.ClassroomCommandService;
 import com.hs.hstesis.learning.domain.services.ClassroomQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.ClassroomResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.ClassroomResourceFromEntityAssembler;
+import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,33 +31,43 @@ public class ClassroomController {
         this.classroomQueryService = classroomQueryService;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(description = "Generates classrooms for all academic levels based on existing study plans.")
     @PostMapping("/generate-all")
-    public ResponseEntity<String> generateAllClassrooms() {
+    public ResponseEntity<MessageResource> generateAllClassrooms() {
         int totalCreated = classroomCommandService.handle(new GenerateClassroomsCommand());
         if (totalCreated == 0) {
-            return ResponseEntity.ok("No new classrooms were created (they already exist or some academic levels are incomplete).");
+            return ResponseEntity.ok(new MessageResource("No new classrooms were created (they already exist or study plans are incomplete)."));
         }
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(String.format("%d classrooms generated successfully", totalCreated));
+                .body(new MessageResource(String.format("%d classrooms generated successfully", totalCreated)));
     }
 
+    @PreAuthorize("hasAuthority('CLASSROOM_READ')")
+    @Operation(description = "Retrieves a classroom.")
     @GetMapping("/{classroomId}")
     public ResponseEntity<ClassroomResource> getClassroomById(@PathVariable Long classroomId) {
         var getClassroomByIdQuery = new GetClassroomByIdQuery(classroomId);
         var classroom = classroomQueryService.handle(getClassroomByIdQuery);
 
         if(classroom.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.badRequest().build();
         }
 
         var classroomResource = ClassroomResourceFromEntityAssembler.toResourceFromEntity(classroom.get());
         return ResponseEntity.ok(classroomResource);
     }
 
+    @PreAuthorize("hasAuthority('CLASSROOM_READ')")
+    @Operation(description = "Retrieves all classrooms associated with a user")
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<ClassroomResource>> getClassroomsByUserId(@PathVariable Long userId) {
         var getClassroomsByUserIdQuery = new GetClassroomsByUserIdQuery(userId);
         var classrooms = classroomQueryService.handle(getClassroomsByUserIdQuery);
+
+        if (classrooms.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
 
         var resources = classrooms.stream()
                 .map(ClassroomResourceFromEntityAssembler::toResourceFromEntity)
@@ -63,10 +76,12 @@ public class ClassroomController {
         return ResponseEntity.ok(resources);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(description = "Deletes an existing classroom")
     @DeleteMapping("/{classroomId}")
-    public ResponseEntity<?> deleteClassroom(@PathVariable Long classroomId) {
+    public ResponseEntity<MessageResource> deleteClassroom(@PathVariable Long classroomId) {
         var command = new DeleteClassroomCommand(classroomId);
         classroomCommandService.handle(command);
-        return ResponseEntity.ok("Classroom deleted successfully");
+        return ResponseEntity.ok(new MessageResource("Classroom deleted successfully"));
     }
 }

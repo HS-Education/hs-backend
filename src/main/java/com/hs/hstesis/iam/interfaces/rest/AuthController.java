@@ -9,14 +9,14 @@ import com.hs.hstesis.iam.interfaces.rest.resources.AuthenticatedUserResource;
 import com.hs.hstesis.iam.interfaces.rest.resources.SignInResource;
 import com.hs.hstesis.iam.interfaces.rest.transform.AuthenticatedUserResourceFromEntityAssembler;
 import com.hs.hstesis.iam.interfaces.rest.transform.SignInCommandFromResourceAssembler;
+import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping(value = "/api/v1/auth", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -33,6 +33,7 @@ public class AuthController {
         this.tokenService = tokenService;
     }
 
+    @Operation(description = "Authenticates a user and returns a JWT token along with a refresh token in HttpOnly cookies.")
     @PostMapping("/sign-in")
     public ResponseEntity<AuthenticatedUserResource> signIn(@RequestBody SignInResource resource) {
 
@@ -52,7 +53,7 @@ public class AuthController {
                 .httpOnly(true)
                 .secure(false)
                 .path("/")
-                .maxAge(900)
+                .maxAge(3600)
                 .sameSite("Strict")
                 .build();
 
@@ -72,13 +73,14 @@ public class AuthController {
                 .body(responseResource);
     }
 
+    @Operation(description = "Refreshes the JWT token using a valid refresh token.")
     @PostMapping("/refresh-token")
-    public ResponseEntity<?> refreshToken(HttpServletRequest request) {
+    public ResponseEntity<MessageResource> refreshToken(HttpServletRequest request) {
         String requestRefreshToken = refreshTokenService.getRefreshTokenFromCookie(request);
 
         if (requestRefreshToken == null || requestRefreshToken.isBlank()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(Map.of("message", "No refresh token provided"));
+                    .body(new MessageResource("No refresh token provided"));
         }
 
         try {
@@ -92,23 +94,24 @@ public class AuthController {
                                 .httpOnly(true)
                                 .secure(false)
                                 .path("/")
-                                .maxAge(900)
+                                .maxAge(3600)
                                 .sameSite("Strict")
                                 .build();
 
                         return ResponseEntity.ok()
                                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
-                                .body(Map.of("message", "Token refreshed successfully"));
+                                .body(new MessageResource("Token refreshed successfully"));
                     })
                     .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
         } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResource(e.getMessage()));
         }
     }
 
-
+    @Operation(description = "Returns the details of the currently authenticated user based on the JWT token.")
     @GetMapping("/me")
-    public ResponseEntity<?> me() {
+    public ResponseEntity<AuthenticatedUserResource> me() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
@@ -118,15 +121,17 @@ public class AuthController {
         var userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
         assert userDetails != null;
-        return ResponseEntity.ok(Map.of(
-                "id", userDetails.getId(),
-                "username", userDetails.getUsername(),
-                "roles", userDetails.getRoles()
-        ));
+        var responseResource = new AuthenticatedUserResource(
+                userDetails.getId(),
+                userDetails.getUsername(),
+                userDetails.getRoles()
+        );
+        return ResponseEntity.ok(responseResource);
     }
 
+    @Operation(description = "Logs out the user by deleting the refresh token and clearing the JWT and refresh token cookies.")
     @PostMapping("/log-out")
-    public ResponseEntity<Void> logOut() {
+    public ResponseEntity<MessageResource> logOut() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof UserDetailsImpl userDetails) {
             refreshTokenService.deleteByUserId(userDetails.getId());
@@ -138,6 +143,6 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
-                .build();
+                .body(new MessageResource("Logged out successfully"));
     }
 }
