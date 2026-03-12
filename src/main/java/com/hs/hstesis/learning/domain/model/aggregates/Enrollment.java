@@ -18,7 +18,7 @@ public class Enrollment {
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    private Long userId;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "classroom_id", nullable = false)
@@ -29,8 +29,8 @@ public class Enrollment {
 
     protected Enrollment() {}
 
-    public Enrollment(User user, Classroom classroom, String roleInClassroom) {
-        this.user = user;
+    public Enrollment(Long userId, Classroom classroom, String roleInClassroom) {
+        this.userId = userId;
         this.classroom = classroom;
         this.roleInClassroom = roleInClassroom;
     }

@@ -13,6 +13,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     List<Enrollment> findAllByClassroomId(Long classroomId);
     Optional<Enrollment> findByUserIdAndClassroomId(Long userId, Long classroomId);
     boolean existsByUserIdAndClassroomId(Long userId, Long classroomId);
+    boolean existsByClassroomIdAndRoleInClassroom(Long classroomId, String roleInClassroom);
 
     @Modifying
     @Transactional

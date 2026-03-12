@@ -10,7 +10,6 @@ import java.time.LocalDate;
 
 @Service
 public class AcademicYearStateValidator {
-
     private final AcademicYearRepository academicYearRepository;
 
     public AcademicYearStateValidator(AcademicYearRepository academicYearRepository) {

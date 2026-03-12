@@ -6,9 +6,8 @@ import com.hs.hstesis.learning.domain.model.commands.CreateAreaCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAreaCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateAreaCommand;
 import com.hs.hstesis.learning.domain.model.entities.Area;
-import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
+import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.AreaCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.AreaRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
 import com.hs.hstesis.shared.domain.model.util.TextUtils;
@@ -21,13 +20,16 @@ public class AreaCommandServiceImpl implements AreaCommandService {
     private final AreaRepository areaRepository;
     private final UserRepository userRepository;
     private final CourseRepository courseRepository;
+    private final AcademicYearStateValidator yearValidator;
 
     public AreaCommandServiceImpl(AreaRepository areaRepository,
                                   UserRepository userRepository,
-                                  CourseRepository courseRepository) {
+                                  CourseRepository courseRepository,
+                                  AcademicYearStateValidator yearValidator) {
         this.areaRepository = areaRepository;
         this.userRepository = userRepository;
         this.courseRepository = courseRepository;
+        this.yearValidator = yearValidator;
     }
 
     @Override
@@ -81,6 +83,8 @@ public class AreaCommandServiceImpl implements AreaCommandService {
 
     @Override
     public void handle(DeleteAreaCommand command){
+        yearValidator.validateCurrentYearIsNotActive();
+
         var area = areaRepository.findById(command.id())
                 .orElseThrow(() -> new AreaNotFoundException(command.id()));
 
@@ -99,7 +103,7 @@ public class AreaCommandServiceImpl implements AreaCommandService {
                 .anyMatch(role -> role.getRoleName().equals("COORDINATOR"));
 
         if (!hasCoordinatorRole) {
-            throw new UserIsNotACoordinatorException(user.getName());
+            throw new InvalidUserRoleException(user.getName(), "COORDINATOR");
         }
 
         areaRepository.findByCoordinatorId(userId).ifPresent(existingArea -> {

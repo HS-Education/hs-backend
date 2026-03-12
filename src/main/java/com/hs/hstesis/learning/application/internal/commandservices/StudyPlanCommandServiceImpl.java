@@ -6,6 +6,7 @@ import com.hs.hstesis.learning.domain.exceptions.StudyPlanEntryNotFoundException
 import com.hs.hstesis.learning.domain.model.aggregates.StudyPlan;
 import com.hs.hstesis.learning.domain.model.commands.AddCourseToStudyPlanCommand;
 import com.hs.hstesis.learning.domain.model.commands.RemoveCourseFromStudyPlanCommand;
+import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.StudyPlanCommandService;
 import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.StudyPlanRepository;
@@ -16,11 +17,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class StudyPlanCommandServiceImpl implements StudyPlanCommandService {
     private final StudyPlanRepository studyPlanRepository;
     private final CourseRepository courseRepository;
+    private final AcademicYearStateValidator yearValidator;
 
     public StudyPlanCommandServiceImpl(StudyPlanRepository studyPlanRepository,
-                                       CourseRepository courseRepository) {
+                                       CourseRepository courseRepository,
+                                       AcademicYearStateValidator yearValidator) {
         this.studyPlanRepository = studyPlanRepository;
         this.courseRepository = courseRepository;
+        this.yearValidator = yearValidator;
     }
 
     @Override
@@ -42,6 +46,8 @@ public class StudyPlanCommandServiceImpl implements StudyPlanCommandService {
     @Override
     @Transactional
     public void handle(RemoveCourseFromStudyPlanCommand command) {
+        yearValidator.validateCurrentYearIsNotActive();
+
         if (!studyPlanRepository.existsById(command.id())) {
             throw new StudyPlanEntryNotFoundException(command.id());
         }

@@ -6,6 +6,7 @@ import com.hs.hstesis.learning.domain.model.aggregates.StudyPlan;
 import com.hs.hstesis.learning.domain.model.commands.DeleteClassroomCommand;
 import com.hs.hstesis.learning.domain.model.commands.GenerateClassroomsCommand;
 import com.hs.hstesis.learning.domain.model.valueobjects.*;
+import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.ClassroomCommandService;
 import com.hs.hstesis.learning.infrastructure.jpa.*;
 import org.springframework.stereotype.Service;
@@ -22,17 +23,20 @@ public class ClassroomCommandServiceImpl implements ClassroomCommandService {
     private final ClassroomRepository classroomRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final StudyPlanRepository studyPlanRepository;
+    private final AcademicYearStateValidator yearValidator;
 
     public ClassroomCommandServiceImpl(SectionRepository sectionRepository,
                                        AcademicYearRepository academicYearRepository,
                                        ClassroomRepository classroomRepository,
                                        EnrollmentRepository enrollmentRepository,
-                                       StudyPlanRepository studyPlanRepository) {
+                                       StudyPlanRepository studyPlanRepository,
+                                       AcademicYearStateValidator yearValidator) {
         this.sectionRepository = sectionRepository;
         this.academicYearRepository = academicYearRepository;
         this.classroomRepository = classroomRepository;
         this.enrollmentRepository = enrollmentRepository;
         this.studyPlanRepository = studyPlanRepository;
+        this.yearValidator = yearValidator;
     }
 
     @Override
@@ -46,8 +50,7 @@ public class ClassroomCommandServiceImpl implements ClassroomCommandService {
                     return year.getStatus() == AcademicYearStatus.PLANNED && hasDates;
                 })
                 .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No academic year available for classroom generation. " +
-                        "Ensure the year is in PLANNED status and all grading periods are configured."));
+                .orElseThrow(NoAcademicYearReadyException::new);
 
         if (planningYear.getStatus() != AcademicYearStatus.PLANNED) {
             throw new ClassroomGenerationDeadlineExceededException();
@@ -61,7 +64,7 @@ public class ClassroomCommandServiceImpl implements ClassroomCommandService {
                 ));
 
         if (levelsToGenerate.isEmpty()) {
-            throw new IllegalStateException("No study plans found to generate classrooms.");
+            throw new StudyPlanEntryNotFoundException();
         }
 
         int classroomsCreated = 0;
@@ -95,12 +98,12 @@ public class ClassroomCommandServiceImpl implements ClassroomCommandService {
     @Override
     @Transactional
     public void handle(DeleteClassroomCommand command) {
+        yearValidator.validateCurrentYearIsNotActive();
+
         var classroom = classroomRepository.findById(command.id())
                 .orElseThrow(() -> new ClassroomNotFoundException(command.id()));
 
-        if (classroom.getStatus() == ClassroomStatus.ACTIVE) {
-            throw new CannotDeleteActiveClassroomException();
-        } else if (classroom.getStatus() == ClassroomStatus.ARCHIVED) {
+        if (classroom.getStatus() == ClassroomStatus.ARCHIVED) {
             throw new CannotDeleteHistoricalDataException();
         }
 

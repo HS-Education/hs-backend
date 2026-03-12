@@ -6,8 +6,8 @@ import com.hs.hstesis.learning.domain.model.aggregates.Section;
 import com.hs.hstesis.learning.domain.model.commands.CreateSectionCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteSectionCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateSectionCommand;
+import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.SectionCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.SectionRepository;
 import com.hs.hstesis.shared.domain.model.util.TextUtils;
 import org.springframework.stereotype.Service;
@@ -17,9 +17,12 @@ import java.util.Optional;
 @Service
 public class SectionCommandServiceImpl implements SectionCommandService {
     private final SectionRepository sectionRepository;
+    private final AcademicYearStateValidator yearValidator;
 
-    public SectionCommandServiceImpl(SectionRepository sectionRepository) {
+    public SectionCommandServiceImpl(SectionRepository sectionRepository,
+                                     AcademicYearStateValidator yearValidator) {
         this.sectionRepository = sectionRepository;
+        this.yearValidator = yearValidator;
     }
 
     @Override
@@ -75,6 +78,8 @@ public class SectionCommandServiceImpl implements SectionCommandService {
 
     @Override
     public void handle(DeleteSectionCommand command){
+        yearValidator.validateCurrentYearIsNotActive();
+
         if(!sectionRepository.existsById(command.id())){
             throw new SectionNotFoundException(command.id());
         }

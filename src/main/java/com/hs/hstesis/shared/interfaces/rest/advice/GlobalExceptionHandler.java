@@ -19,12 +19,9 @@ public class GlobalExceptionHandler {
 
     // --- BAD REQUEST (400) ---
     @ExceptionHandler({
-            ClassroomGenerationDeadlineExceededException.class,
-            FinishedGradingPeriodModificationException.class,
-            GradingPeriodDurationTooShortException.class,
             GradingPeriodInPastException.class,
             InvalidGradingPeriodYearException.class,
-            StartedGradingPeriodModificationException.class,
+            GradingPeriodDurationTooShortException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException ex) {
         logger.error("Bad Request: {}", ex.getMessage());
@@ -68,8 +65,6 @@ public class GlobalExceptionHandler {
             CourseNotFoundException.class,
             EnrollmentNotFoundException.class,
             GradingPeriodNotFoundException.class,
-            NoAcademicLevelsFoundException.class,
-            RoleNotFoundException.class,
             SectionNotFoundException.class,
             StudyPlanEntryNotFoundException.class,
             UserNotFoundException.class
@@ -92,19 +87,23 @@ public class GlobalExceptionHandler {
             AcademicYearIsActiveException.class,
             AreaNameAlreadyExistsException.class,
             BimesterAlreadyExistsInAcademicYearException.class,
-            CannotDeleteActiveClassroomException.class,
             CannotDeleteHistoricalDataException.class,
             CourseNameAlreadyException.class,
             CourseAlreadyInStudyPlanException.class,
             GradingPeriodOverlapException.class,
             IncompleteAcademicYearException.class,
-            InvalidGradingPeriodDeleteException.class,
-            NoActiveAcademicYearException.class,
             SectionNameAlreadyExistsInAcademicLevelException.class,
             UserAlreadyIsACoordinatorException.class,
             UserIsNotACoordinatorException.class,
             BimesterSequencePredecessorException.class,
-            BimesterSequenceSuccessorException.class
+            BimesterSequenceSuccessorException.class,
+            NoAcademicYearReadyException.class,
+            FinishedGradingPeriodModificationException.class,
+            StartedGradingPeriodModificationException.class,
+            ClassroomGenerationDeadlineExceededException.class,
+            NoClassroomsDefinedException.class,
+            InvalidUserRoleException.class,
+            TeacherAlreadyAssignedException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());

@@ -44,6 +44,11 @@ public class User extends AuditableAbstractAggregateRoot<User> {
         this.isActive = true;
     }
 
+    public boolean hasRole(String roleName) {
+        return roles.stream()
+                .anyMatch(role -> role.getRoleName().equals(roleName));
+    }
+
     public void addRole(Role role) {
         this.roles.add(role);
     }

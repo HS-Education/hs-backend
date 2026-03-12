@@ -7,8 +7,8 @@ import com.hs.hstesis.learning.domain.model.aggregates.Course;
 import com.hs.hstesis.learning.domain.model.commands.CreateCourseCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteCourseCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateCourseCommand;
+import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.CourseCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.AreaRepository;
 import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
 import com.hs.hstesis.shared.domain.model.util.TextUtils;
@@ -20,11 +20,14 @@ import java.util.Optional;
 public class CourseCommandServiceImpl implements CourseCommandService {
     private final CourseRepository courseRepository;
     private final AreaRepository areaRepository;
+    private final AcademicYearStateValidator yearValidator;
 
     public CourseCommandServiceImpl(CourseRepository courseRepository,
-                                    AreaRepository areaRepository) {
+                                    AreaRepository areaRepository,
+                                    AcademicYearStateValidator yearValidator) {
         this.courseRepository = courseRepository;
         this.areaRepository = areaRepository;
+        this.yearValidator = yearValidator;
     }
 
     @Override
@@ -72,6 +75,8 @@ public class CourseCommandServiceImpl implements CourseCommandService {
 
     @Override
     public void handle(DeleteCourseCommand command){
+        yearValidator.validateCurrentYearIsNotActive();
+
         if (!courseRepository.existsById(command.id())) {
             throw new CourseNotFoundException(command.id());
         }
