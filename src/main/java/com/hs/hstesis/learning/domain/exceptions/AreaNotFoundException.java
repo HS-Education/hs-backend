@@ -1,7 +1,9 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
-public class AreaNotFoundException extends RuntimeException {
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
+
+public class AreaNotFoundException extends ResourceNotFoundException {
     public AreaNotFoundException(Long id) {
-        super(String.format("Area with id %d not found.", id));
+        super("Area", id);
     }
 }

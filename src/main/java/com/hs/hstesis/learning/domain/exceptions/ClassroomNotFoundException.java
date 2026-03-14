@@ -1,7 +1,15 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
-public class ClassroomNotFoundException extends RuntimeException {
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
+
+import java.util.List;
+
+public class ClassroomNotFoundException extends ResourceNotFoundException {
     public ClassroomNotFoundException(Long id) {
-        super(String.format("Classroom with id %d not found.", id));
+        super("Classroom", id);
+    }
+
+    public ClassroomNotFoundException(List<Long> ids) {
+        super("Classrooms", ids);
     }
 }

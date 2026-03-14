@@ -1,7 +1,9 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
-public class GradingPeriodNotFoundException extends RuntimeException {
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
+
+public class GradingPeriodNotFoundException extends ResourceNotFoundException {
     public GradingPeriodNotFoundException(Long id) {
-        super(String.format("Grading period with id %d not found.", id));
+        super("Grading period", id);
     }
 }

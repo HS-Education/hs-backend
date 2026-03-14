@@ -1,6 +1,6 @@
 package com.hs.hstesis.learning.application.internal.commandservices;
 
-import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
+import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
 import com.hs.hstesis.learning.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.model.commands.CreateAreaCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAreaCommand;
@@ -18,18 +18,18 @@ import java.util.Optional;
 @Service
 public class AreaCommandServiceImpl implements AreaCommandService {
     private final AreaRepository areaRepository;
-    private final UserRepository userRepository;
     private final CourseRepository courseRepository;
     private final AcademicYearStateValidator yearValidator;
+    private final IamContextFacade iamContextFacade;
 
     public AreaCommandServiceImpl(AreaRepository areaRepository,
-                                  UserRepository userRepository,
                                   CourseRepository courseRepository,
-                                  AcademicYearStateValidator yearValidator) {
+                                  AcademicYearStateValidator yearValidator,
+                                  IamContextFacade iamContextFacade) {
         this.areaRepository = areaRepository;
-        this.userRepository = userRepository;
         this.courseRepository = courseRepository;
         this.yearValidator = yearValidator;
+        this.iamContextFacade = iamContextFacade;
     }
 
     @Override
@@ -96,19 +96,16 @@ public class AreaCommandServiceImpl implements AreaCommandService {
     }
 
     private void validateCoordinator(Long userId, Long currentAreaId) {
-        var user = userRepository.findById(userId)
+        String userName = iamContextFacade.fetchUserNameById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        boolean hasCoordinatorRole = user.getRoles().stream()
-                .anyMatch(role -> role.getRoleName().equals("COORDINATOR"));
-
-        if (!hasCoordinatorRole) {
-            throw new InvalidUserRoleException(user.getName(), "COORDINATOR");
+        if (!iamContextFacade.hasRole(userId, "COORDINATOR")) {
+            throw new InvalidUserRoleException(userName, "COORDINATOR");
         }
 
         areaRepository.findByCoordinatorId(userId).ifPresent(existingArea -> {
             if (!existingArea.getId().equals(currentAreaId)) {
-                throw new UserAlreadyIsACoordinatorException(user.getName(), existingArea.getName());
+                throw new UserAlreadyIsACoordinatorException(userName, existingArea.getName());
             }
         });
     }

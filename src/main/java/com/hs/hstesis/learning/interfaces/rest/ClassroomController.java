@@ -3,11 +3,15 @@ package com.hs.hstesis.learning.interfaces.rest;
 import com.hs.hstesis.learning.domain.model.commands.DeleteClassroomCommand;
 import com.hs.hstesis.learning.domain.model.commands.GenerateClassroomsCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetClassroomByIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetClassroomMembersQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetClassroomsByUserIdQuery;
 import com.hs.hstesis.learning.domain.services.ClassroomCommandService;
 import com.hs.hstesis.learning.domain.services.ClassroomQueryService;
+import com.hs.hstesis.learning.domain.services.EnrollmentQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.ClassroomResource;
+import com.hs.hstesis.learning.interfaces.rest.resources.EnrollmentResource;
 import com.hs.hstesis.learning.interfaces.rest.transform.ClassroomResourceFromEntityAssembler;
+import com.hs.hstesis.learning.interfaces.rest.transform.EnrollmentResourceFromQueryModelAssembler;
 import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,10 +29,14 @@ import java.util.List;
 public class ClassroomController {
     private final ClassroomCommandService classroomCommandService;
     private final ClassroomQueryService classroomQueryService;
+    private final EnrollmentQueryService enrollmentQueryService;
 
-    public ClassroomController(ClassroomCommandService classroomCommandService, ClassroomQueryService classroomQueryService) {
+    public ClassroomController(ClassroomCommandService classroomCommandService,
+                               ClassroomQueryService classroomQueryService,
+                               EnrollmentQueryService enrollmentQueryService) {
         this.classroomCommandService = classroomCommandService;
         this.classroomQueryService = classroomQueryService;
+        this.enrollmentQueryService = enrollmentQueryService;
     }
 
     @PreAuthorize("hasRole('ADMIN')")
@@ -37,7 +45,7 @@ public class ClassroomController {
     public ResponseEntity<MessageResource> generateAllClassrooms() {
         int totalCreated = classroomCommandService.handle(new GenerateClassroomsCommand());
         if (totalCreated == 0) {
-            return ResponseEntity.ok(new MessageResource("No new classrooms were created (they already exist or study plans are incomplete)."));
+            return ResponseEntity.ok(new MessageResource("No new classrooms were created because they already exists."));
         }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new MessageResource(String.format("%d classrooms generated successfully", totalCreated)));
@@ -60,8 +68,8 @@ public class ClassroomController {
 
     @PreAuthorize("hasAuthority('CLASSROOM_READ')")
     @Operation(description = "Retrieves all classrooms associated with a user")
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<ClassroomResource>> getClassroomsByUserId(@PathVariable Long userId) {
+    @GetMapping("/user")
+    public ResponseEntity<List<ClassroomResource>> getClassroomsByUserId(@RequestParam Long userId) {
         var getClassroomsByUserIdQuery = new GetClassroomsByUserIdQuery(userId);
         var classrooms = classroomQueryService.handle(getClassroomsByUserIdQuery);
 
@@ -71,6 +79,21 @@ public class ClassroomController {
 
         var resources = classrooms.stream()
                 .map(ClassroomResourceFromEntityAssembler::toResourceFromEntity)
+                .toList();
+
+        return ResponseEntity.ok(resources);
+    }
+
+    @PreAuthorize("hasAuthority('CLASSROOM_MEMBERS_READ')")
+    @Operation(description = "Retrieves all members of a classroom")
+    @GetMapping("/{classroomId}/members")
+    public ResponseEntity<List<EnrollmentResource>> getClassroomMembers(@PathVariable Long classroomId) {
+
+        var getClassroomMembersQuery = new GetClassroomMembersQuery(classroomId);
+        var enrollments = enrollmentQueryService.handle(getClassroomMembersQuery);
+
+        var resources = enrollments.stream()
+                .map(EnrollmentResourceFromQueryModelAssembler::toResourceFromQueryModel)
                 .toList();
 
         return ResponseEntity.ok(resources);

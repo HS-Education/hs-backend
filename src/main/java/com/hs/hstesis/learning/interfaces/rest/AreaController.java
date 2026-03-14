@@ -1,7 +1,5 @@
 package com.hs.hstesis.learning.interfaces.rest;
 
-import com.hs.hstesis.iam.domain.model.queries.GetUserNameByIdQuery;
-import com.hs.hstesis.iam.domain.services.UserQueryService;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAreaCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetAllAreasQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetAreaByIdQuery;
@@ -10,7 +8,7 @@ import com.hs.hstesis.learning.domain.services.AreaQueryService;
 import com.hs.hstesis.learning.interfaces.rest.resources.AreaResource;
 import com.hs.hstesis.learning.interfaces.rest.resources.CreateAreaResource;
 import com.hs.hstesis.learning.interfaces.rest.resources.UpdateAreaResource;
-import com.hs.hstesis.learning.interfaces.rest.transform.AreaResourceFromEntityAssembler;
+import com.hs.hstesis.learning.interfaces.rest.transform.AreaResourceFromQueryModelAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.CreateAreaCommandFromResourceAssembler;
 import com.hs.hstesis.learning.interfaces.rest.transform.UpdateAreaCommandFromResourceAssembler;
 import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
@@ -31,14 +29,11 @@ import java.util.List;
 public class AreaController {
     private final AreaCommandService areaCommandService;
     private final AreaQueryService areaQueryService;
-    private final UserQueryService userQueryService;
 
     public AreaController(AreaCommandService areaCommandService,
-                          AreaQueryService areaQueryService,
-                          UserQueryService userQueryService) {
+                          AreaQueryService areaQueryService) {
         this.areaCommandService = areaCommandService;
         this.areaQueryService = areaQueryService;
-        this.userQueryService = userQueryService;
     }
 
     @Operation(description = "Creates a new area.")
@@ -59,14 +54,7 @@ public class AreaController {
             return ResponseEntity.badRequest().build();
         }
 
-        var getUsernameByIdQuery = new GetUserNameByIdQuery(createAreaResource.coordinatorId());
-        var coordinatorUsername = userQueryService.handle(getUsernameByIdQuery);
-
-        if(coordinatorUsername.isEmpty()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(area.get(), coordinatorUsername.get());
+        var areaResource = AreaResourceFromQueryModelAssembler.toResourceFromQueryModel(area.get());
         return new ResponseEntity<>(areaResource, HttpStatus.CREATED);
     }
 
@@ -77,12 +65,7 @@ public class AreaController {
         var areas = areaQueryService.handle(getAllAreasQuery);
 
         var areaResources = areas.stream()
-                .map(area -> {
-                    var getUsernameByIdQuery = new GetUserNameByIdQuery(area.getCoordinatorId());
-                    var coordinatorUsername = userQueryService.handle(getUsernameByIdQuery)
-                            .orElse("Unknown");
-                    return AreaResourceFromEntityAssembler.toResourceFromEntity(area, coordinatorUsername);
-                })
+                .map(AreaResourceFromQueryModelAssembler::toResourceFromQueryModel)
                 .toList();
         return ResponseEntity.ok(areaResources);
     }
@@ -98,14 +81,14 @@ public class AreaController {
             return ResponseEntity.badRequest().build();
         }
 
-        var getUsernameByIdQuery = new GetUserNameByIdQuery(updatedArea.get().getCoordinatorId());
-        var coordinatorUsername = userQueryService.handle(getUsernameByIdQuery);
+        var getAreaByIdQuery = new GetAreaByIdQuery(updatedArea.get().getId());
+        var area = areaQueryService.handle(getAreaByIdQuery);
 
-        if(coordinatorUsername.isEmpty()) {
+        if(area.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
 
-        var areaResource = AreaResourceFromEntityAssembler.toResourceFromEntity(updatedArea.get(), coordinatorUsername.get());
+        var areaResource = AreaResourceFromQueryModelAssembler.toResourceFromQueryModel(area.get());
         return ResponseEntity.ok(areaResource);
     }
 

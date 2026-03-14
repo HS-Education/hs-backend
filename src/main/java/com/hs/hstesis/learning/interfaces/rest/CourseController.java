@@ -57,30 +57,23 @@ public class CourseController {
         return new ResponseEntity<>(courseResource, HttpStatus.CREATED);
     }
 
-    @Operation(description = "Return a list of all courses.")
+    @Operation(description = "Return a list of courses. Can be optionally filtered by areaId.")
     @GetMapping
-    public ResponseEntity<List<CourseResource>> getAllCourses() {
-        var getAllCoursesQuery = new GetAllCoursesQuery();
-        var courses = courseQueryService.handle(getAllCoursesQuery);
-        var courseResources = courses.stream()
-                .map(CourseResourceFromEntityAssembler::toResourceFromEntity)
-                .toList();
-        return ResponseEntity.ok(courseResources);
-    }
+    public ResponseEntity<List<CourseResource>> getCourses(
+            @RequestParam(name = "areaId", required = false) Long areaId) {
 
-    @Operation(description = "Return a list of courses by area id.")
-    @GetMapping("/{areaId}")
-    public ResponseEntity<List<CourseResource>> getCoursesByAreaId(@PathVariable Long areaId){
-        var getCoursesByAreaIdQuery = new GetCoursesByAreaIdQuery(areaId);
-        var courses = courseQueryService.handle(getCoursesByAreaIdQuery);
+        var courses = (areaId == null)
+                ? courseQueryService.handle(new GetAllCoursesQuery())
+                : courseQueryService.handle(new GetCoursesByAreaIdQuery(areaId));
 
-        if(courses.isEmpty()){
+        if (courses.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
 
         var courseResources = courses.stream()
                 .map(CourseResourceFromEntityAssembler::toResourceFromEntity)
                 .toList();
+
         return ResponseEntity.ok(courseResources);
     }
 

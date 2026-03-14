@@ -12,17 +12,17 @@ public record EnrollStudentsToAcademicLevelCommand(
         Long academicYearId
 ) {
     public EnrollStudentsToAcademicLevelCommand {
-        if (studentIds == null || studentIds.isEmpty()) {
-            throw new IllegalArgumentException("Student id's cannot be null or empty");
+        if (studentIds == null || studentIds.isEmpty() || studentIds.stream().anyMatch(id -> id == null || id <= 0)) {
+            throw new IllegalArgumentException("Student ids cannot be null, empty or negative.");
         }
         if (educationLevel == null) {
-            throw new IllegalArgumentException("Education level cannot be null");
+            throw new IllegalArgumentException("Education level cannot be .");
         }
         if (gradeLevel == null) {
-            throw new IllegalArgumentException("Grade level cannot be null");
+            throw new IllegalArgumentException("Grade level cannot be null.");
         }
         if (academicYearId == null || academicYearId <= 0) {
-            throw new IllegalArgumentException("Academic Year id cannot be null or negative");
+            throw new IllegalArgumentException("Academic year id cannot be null or negative.");
         }
     }
 }

@@ -4,11 +4,11 @@ import com.hs.hstesis.learning.domain.exceptions.AcademicYearIsActiveException;
 import com.hs.hstesis.learning.domain.exceptions.AcademicYearNotFoundException;
 import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
 import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 
-@Service
+@Component
 public class AcademicYearStateValidator {
     private final AcademicYearRepository academicYearRepository;
 
@@ -19,11 +19,11 @@ public class AcademicYearStateValidator {
     public void validateCurrentYearIsNotActive() {
         int currentYearValue = LocalDate.now().getYear();
 
-        var academicYear = academicYearRepository.findByYear(currentYearValue)
-                .orElseThrow(() -> new AcademicYearNotFoundException(currentYearValue));
-
-        if (academicYear.getStatus() == AcademicYearStatus.ACTIVE) {
-            throw new AcademicYearIsActiveException();
-        }
+        academicYearRepository.findByYear(currentYearValue)
+                .ifPresent(academicYear -> {
+                    if (academicYear.getStatus() == AcademicYearStatus.ACTIVE) {
+                        throw new AcademicYearIsActiveException();
+                    }
+                });
     }
 }

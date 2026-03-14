@@ -1,7 +1,9 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
-public class AcademicYearNotFoundException extends RuntimeException {
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
+
+public class AcademicYearNotFoundException extends ResourceNotFoundException {
     public AcademicYearNotFoundException(Integer year) {
-        super(String.format("Academic year '%d' not found.", year));
+        super("Academic year", year);
     }
 }

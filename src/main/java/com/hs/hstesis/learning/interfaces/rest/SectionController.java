@@ -59,29 +59,25 @@ public class SectionController {
         return new ResponseEntity<>(sectionResource, HttpStatus.CREATED);
     }
 
-    @Operation(description = "Return a list of all sections.")
+    @Operation(description = "Returns a list of all sections, optionally filtered by education and grade level.")
     @GetMapping
-    public ResponseEntity<List<SectionResource>> getAllSections() {
-        var getAllSectionsQuery = new GetAllSectionsQuery();
-        var sections = sectionQueryService.handle(getAllSectionsQuery);
-        var sectionResources = sections.stream()
-                .map(SectionResourceFromEntityAssembler::toResourceFromEntity)
-                .toList();
-        return ResponseEntity.ok(sectionResources);
-    }
-
-    @Operation(description = "Return a list of sections by education level and grade level.")
-    @GetMapping("/filter")
-    public ResponseEntity<List<SectionResource>> getSectionsByEducationAndGradeLevel(
-            @RequestParam EducationLevel educationLevel,
-            @RequestParam GradeLevel gradeLevel
+    public ResponseEntity<List<SectionResource>> getSections(
+            @RequestParam(required = false) EducationLevel educationLevel,
+            @RequestParam(required = false) GradeLevel gradeLevel
     ) {
-        var getSectionsByAcademicLevelIdQuery = new GetSectionsByEducationAndGradeLevelQuery(educationLevel, gradeLevel);
-        var sections = sectionQueryService.handle(getSectionsByAcademicLevelIdQuery);
-        var sectionResources = sections.stream()
+        var sections = (educationLevel != null && gradeLevel != null)
+                ? sectionQueryService.handle(new GetSectionsByEducationAndGradeLevelQuery(educationLevel, gradeLevel))
+                : sectionQueryService.handle(new GetAllSectionsQuery());
+
+        if (sections.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        var resources = sections.stream()
                 .map(SectionResourceFromEntityAssembler::toResourceFromEntity)
                 .toList();
-        return ResponseEntity.ok(sectionResources);
+
+        return ResponseEntity.ok(resources);
     }
 
     @Operation(description = "Update the details of an existing section.")

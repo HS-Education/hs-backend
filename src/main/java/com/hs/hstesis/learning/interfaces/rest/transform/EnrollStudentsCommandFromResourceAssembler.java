@@ -7,7 +7,8 @@ public class EnrollStudentsCommandFromResourceAssembler {
     public static EnrollStudentsToAcademicLevelCommand toCommandFromResource(EnrollStudentsResource resource) {
         return new EnrollStudentsToAcademicLevelCommand(
                 resource.studentIds(),
-                resource.academicLevelId(),
+                resource.educationLevel(),
+                resource.gradeLevel(),
                 resource.academicYearId()
         );
     }

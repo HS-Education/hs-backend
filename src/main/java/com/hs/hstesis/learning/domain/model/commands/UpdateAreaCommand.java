@@ -9,7 +9,7 @@ public record UpdateAreaCommand(Long id, String name, Long coordinatorId) {
             throw new IllegalArgumentException("Area name cannot be blank");
         }
         if (coordinatorId != null && coordinatorId <= 0) {
-            throw new IllegalArgumentException("Coordinator id must be a positive number");
+            throw new IllegalArgumentException("Coordinator id cannot be null or negative");
         }
     }
 }

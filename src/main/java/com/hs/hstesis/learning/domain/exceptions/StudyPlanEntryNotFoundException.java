@@ -1,10 +1,13 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
-public class StudyPlanEntryNotFoundException extends RuntimeException {
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
+
+public class StudyPlanEntryNotFoundException extends ResourceNotFoundException {
     public StudyPlanEntryNotFoundException(Long id) {
-        super(String.format("Study plan with id '%d' not found.", id));
+        super("Study plan entry", id);
     }
-    public StudyPlanEntryNotFoundException(){
+
+    public StudyPlanEntryNotFoundException() {
         super("No study plans found to generate classrooms.");
     }
 }

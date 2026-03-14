@@ -1,7 +1,9 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
-public class SectionNotFoundException extends RuntimeException {
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
+
+public class SectionNotFoundException extends ResourceNotFoundException {
     public SectionNotFoundException(Long id) {
-        super(String.format("Section with id %d not found.", id));
+        super("Section", id);
     }
 }

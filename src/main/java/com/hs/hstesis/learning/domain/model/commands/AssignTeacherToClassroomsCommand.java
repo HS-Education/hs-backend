@@ -4,11 +4,11 @@ import java.util.List;
 
 public record AssignTeacherToClassroomsCommand(Long teacherId, List<Long> classroomIds) {
     public AssignTeacherToClassroomsCommand {
-        if (teacherId == null) {
-            throw new IllegalArgumentException("Teacher ID cannot be null");
+        if (teacherId == null || teacherId <= 0) {
+            throw new IllegalArgumentException("Teacher id cannot be null or negative.");
         }
-        if (classroomIds == null) {
-            throw new IllegalArgumentException("Classroom IDs cannot be null");
+        if (classroomIds == null || classroomIds.isEmpty() ||  classroomIds.stream().anyMatch(id -> id <= 0)) {
+            throw new IllegalArgumentException("Classroom ids cannot be null, empty or negative.");
         }
     }
 }

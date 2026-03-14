@@ -1,9 +1,10 @@
 package com.hs.hstesis.iam.application.internal.queryservices;
 
 import com.hs.hstesis.iam.domain.model.aggregates.User;
-import com.hs.hstesis.iam.domain.model.entity.Role;
 import com.hs.hstesis.iam.domain.model.queries.GetAllUsersQuery;
+import com.hs.hstesis.iam.domain.model.queries.GetUserByIdQuery;
 import com.hs.hstesis.iam.domain.model.queries.GetUserNameByIdQuery;
+import com.hs.hstesis.iam.domain.model.queries.GetUsersByIdsQuery;
 import com.hs.hstesis.iam.domain.model.valueobjects.Roles;
 import com.hs.hstesis.iam.domain.services.UserQueryService;
 import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
@@ -29,5 +30,15 @@ public class UserQueryServiceImpl implements UserQueryService {
     @Override
     public List<User> handle(GetAllUsersQuery query) {
         return userRepository.findAllByRoles_RoleNameNot(Roles.ROLE_ADMIN);
+    }
+
+    @Override
+    public Optional<User> handle(GetUserByIdQuery query) {
+        return userRepository.findById(query.userId());
+    }
+
+    @Override
+    public List<User> handle(GetUsersByIdsQuery query) {
+        return userRepository.findAllById(query.userIds());
     }
 }

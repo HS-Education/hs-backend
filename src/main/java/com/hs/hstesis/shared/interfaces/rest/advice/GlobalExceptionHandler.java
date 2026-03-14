@@ -1,6 +1,9 @@
 package com.hs.hstesis.shared.interfaces.rest.advice;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.hs.hstesis.iam.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.exceptions.*;
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
 import com.hs.hstesis.shared.interfaces.rest.resources.ApiErrorResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +24,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             GradingPeriodInPastException.class,
             InvalidGradingPeriodYearException.class,
-            GradingPeriodDurationTooShortException.class
+            GradingPeriodDurationTooShortException.class,
+            InvalidRoleException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException ex) {
         logger.error("Bad Request: {}", ex.getMessage());
@@ -59,15 +63,7 @@ public class GlobalExceptionHandler {
 
     // --- NOT FOUND (404) ---
     @ExceptionHandler({
-            AcademicYearNotFoundException.class,
-            AreaNotFoundException.class,
-            ClassroomNotFoundException.class,
-            CourseNotFoundException.class,
-            EnrollmentNotFoundException.class,
-            GradingPeriodNotFoundException.class,
-            SectionNotFoundException.class,
-            StudyPlanEntryNotFoundException.class,
-            UserNotFoundException.class
+            ResourceNotFoundException.class
     })
     public ResponseEntity<ApiErrorResponse> handleNotFound(RuntimeException ex) {
         logger.error("Not Found: {}", ex.getMessage());
@@ -103,7 +99,8 @@ public class GlobalExceptionHandler {
             ClassroomGenerationDeadlineExceededException.class,
             NoClassroomsDefinedException.class,
             InvalidUserRoleException.class,
-            TeacherAlreadyAssignedException.class
+            TeacherAlreadyAssignedException.class,
+            CannotRemoveLastAdminException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());
@@ -140,11 +137,29 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
-        logger.error("Malformed JSON Request: {}", ex.getMessage());
+        logger.error("Not Readable: {}", ex.getMessage());
+        Throwable mostSpecificCause = ex.getMostSpecificCause();
+
+        if (mostSpecificCause instanceof IllegalArgumentException illegalArgumentEx) {
+            return handleIllegalArgument(illegalArgumentEx);
+        }
+
+        if (ex.getCause() instanceof InvalidFormatException invalidFormatException) {
+            String rejectedValue = invalidFormatException.getValue().toString();
+            Class<?> targetType = invalidFormatException.getTargetType();
+
+            var errorResponse = new ApiErrorResponse(
+                    HttpStatus.BAD_REQUEST.value(),
+                    "Type Mismatch",
+                    String.format("Invalid value '%s' for expected type '%s'", rejectedValue, targetType.getSimpleName())
+            );
+            return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+        }
+
         var errorResponse = new ApiErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
                 "Malformed JSON",
-                "The request body contains invalid JSON syntax"
+                "The request body contains invalid JSON syntax or structure."
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }

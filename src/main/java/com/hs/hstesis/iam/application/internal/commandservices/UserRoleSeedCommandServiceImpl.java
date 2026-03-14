@@ -31,7 +31,9 @@ public class UserRoleSeedCommandServiceImpl implements UserRoleCommandService {
     private final HashingService hashingService;
     private static final Dotenv dotenv = Dotenv.load();
 
-    public UserRoleSeedCommandServiceImpl(RoleRepository roleRepository, PermissionRepository permissionRepository, UserRepository userRepository,
+    public UserRoleSeedCommandServiceImpl(RoleRepository roleRepository,
+                                          PermissionRepository permissionRepository,
+                                          UserRepository userRepository,
                                           HashingService hashingService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
@@ -48,11 +50,12 @@ public class UserRoleSeedCommandServiceImpl implements UserRoleCommandService {
     @Transactional
     public void handle(SeedUserRoleCommand command) {
         Permission classroomRead = createPermissionIfNotFound(Permissions.CLASSROOM_READ);
+        Permission classroomMembersRead = createPermissionIfNotFound(Permissions.CLASSROOM_MEMBERS_READ);
 
-        createRoleIfNotFound(Roles.ROLE_STUDENT, Set.of(classroomRead));
-        createRoleIfNotFound(Roles.ROLE_TEACHER, Set.of(classroomRead));
-        createRoleIfNotFound(Roles.ROLE_COORDINATOR, Set.of(classroomRead));
-        createRoleIfNotFound(Roles.ROLE_ADMIN, Set.of(classroomRead));
+        createRoleIfNotFound(Roles.ROLE_STUDENT, Set.of(classroomRead, classroomMembersRead));
+        createRoleIfNotFound(Roles.ROLE_TEACHER, Set.of(classroomRead, classroomMembersRead));
+        createRoleIfNotFound(Roles.ROLE_COORDINATOR, Set.of(classroomRead, classroomMembersRead));
+        createRoleIfNotFound(Roles.ROLE_ADMIN, Set.of(classroomRead, classroomMembersRead));
 
         String STUDENT_USERNAME = dotenv.get("STUDENT_USERNAME");
         String TEACHER_USERNAME = dotenv.get("TEACHER_USERNAME");
@@ -98,7 +101,7 @@ public class UserRoleSeedCommandServiceImpl implements UserRoleCommandService {
 
             roleNames.forEach(roleName -> {
                 Role role = roleRepository.findByRoleName(roleName)
-                        .orElseThrow(() -> new InvalidRoleException("Seed error: Role not found - " + roleName + "for user " + username));
+                        .orElseThrow(() -> new InvalidRoleException(roleName, username));
                 user.getRoles().add(role);
             });
 

@@ -1,12 +1,13 @@
 package com.hs.hstesis.learning.application.internal.commandservices;
 
-import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
+import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
 import com.hs.hstesis.learning.domain.exceptions.*;
+import com.hs.hstesis.learning.domain.model.aggregates.Classroom;
 import com.hs.hstesis.learning.domain.model.aggregates.Enrollment;
 import com.hs.hstesis.learning.domain.model.commands.AssignTeacherToClassroomsCommand;
 import com.hs.hstesis.learning.domain.model.commands.EnrollStudentsToAcademicLevelCommand;
 import com.hs.hstesis.learning.domain.model.commands.UnassignTeacherFromClassroomsCommand;
-import com.hs.hstesis.learning.domain.model.commands.UnenrollUserCommand;
+import com.hs.hstesis.learning.domain.model.commands.UnenrollStudentFromClassroomsCommand;
 import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
 import com.hs.hstesis.learning.domain.services.EnrollmentCommandService;
 import com.hs.hstesis.learning.infrastructure.jpa.ClassroomRepository;
@@ -14,18 +15,22 @@ import com.hs.hstesis.learning.infrastructure.jpa.EnrollmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 @Service
 public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
     private final EnrollmentRepository enrollmentRepository;
     private final ClassroomRepository classroomRepository;
-    private final UserRepository userRepository;
+    private final IamContextFacade iamContextFacade;
 
     public EnrollmentCommandServiceImpl(EnrollmentRepository enrollmentRepository,
                                         ClassroomRepository classroomRepository,
-                                        UserRepository userRepository) {
+                                        IamContextFacade  iamContextFacade) {
         this.enrollmentRepository = enrollmentRepository;
         this.classroomRepository = classroomRepository;
-        this.userRepository = userRepository;
+        this.iamContextFacade = iamContextFacade;
     }
 
     @Override
@@ -44,16 +49,26 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
             );
         }
 
-        var students = userRepository.findAllById(command.studentIds());
+        Set<Long> uniqueStudentIds = new HashSet<>(command.studentIds());
 
-        for (var student : students) {
+        var missingUsers = iamContextFacade.getMissingUsers(uniqueStudentIds);
+        if (!missingUsers.isEmpty()) {
+            throw new UserNotFoundException(missingUsers);
+        }
+
+        var invalidUsers = iamContextFacade.getUserNamesWithoutRole(uniqueStudentIds, "STUDENT");
+        if (!invalidUsers.isEmpty()) {
+            throw new InvalidUserRoleException(invalidUsers.getFirst(), "STUDENT");
+        }
+
+        for (Long studentId : command.studentIds()) {
             for (var classroom : classrooms) {
                 if (classroom.getAcademicYear().getStatus() == AcademicYearStatus.CLOSED) {
                     continue;
                 }
 
-                if (!enrollmentRepository.existsByUserIdAndClassroomId(student.getId(), classroom.getId())) {
-                    var enrollment = new Enrollment(student.getId(), classroom, "STUDENT");
+                if (!enrollmentRepository.existsByUserIdAndClassroomId(studentId, classroom.getId())) {
+                    var enrollment = new Enrollment(studentId, classroom, "STUDENT");
                     enrollmentRepository.save(enrollment);
                 }
             }
@@ -63,30 +78,33 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
     @Override
     @Transactional
     public void handle(AssignTeacherToClassroomsCommand command) {
-        var user = userRepository.findById(command.teacherId())
+        String teacherName = iamContextFacade.fetchUserNameById(command.teacherId())
                 .orElseThrow(() -> new UserNotFoundException(command.teacherId()));
 
-        boolean isTeacher = user.getRoles().stream()
-                .anyMatch(role -> role.getRoleName().equals("TEACHER"));
-        if (!isTeacher) {
-            throw new InvalidUserRoleException(user.getName(), "TEACHER");
+        if (!iamContextFacade.hasRole(command.teacherId(), "TEACHER")) {
+            throw new InvalidUserRoleException(teacherName, "TEACHER");
         }
 
-        var classrooms = classroomRepository.findAllById(command.classroomIds());
-        if (classrooms.isEmpty()) {
-            throw new RuntimeException("No classrooms were found with the provided IDs.");
+        var foundClassrooms = classroomRepository.findAllById(command.classroomIds());
+        if (foundClassrooms.size() != command.classroomIds().size()) {
+            var foundIds = foundClassrooms.stream().map(Classroom::getId).toList();
+            var missingIds = command.classroomIds().stream()
+                    .filter(id -> !foundIds.contains(id))
+                    .toList();
+
+            throw new ClassroomNotFoundException(missingIds);
         }
 
-        for (var classroom : classrooms) {
+        for (var classroom : foundClassrooms) {
             if (classroom.getAcademicYear().getStatus() == AcademicYearStatus.CLOSED) {
-                throw new IllegalStateException("Cannot assign teachers to an archived (CLOSED) academic year.");
+                throw new CannotDeleteHistoricalDataException();
             }
 
             boolean hasTeacher = enrollmentRepository.existsByClassroomIdAndRoleInClassroom(
                     classroom.getId(), "TEACHER");
             if (hasTeacher) {
                 boolean isAlreadyAssignedToThisUser = enrollmentRepository.existsByUserIdAndClassroomId(
-                        user.getId(), classroom.getId());
+                        command.teacherId(), classroom.getId());
 
                 if (!isAlreadyAssignedToThisUser) {
                     throw new TeacherAlreadyAssignedException();
@@ -94,7 +112,7 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
                 continue;
             }
 
-            var enrollment = new Enrollment(user.getId(), classroom, "TEACHER");
+            var enrollment = new Enrollment(command.teacherId(), classroom, "TEACHER");
             enrollmentRepository.save(enrollment);
         }
     }
@@ -102,19 +120,32 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
     @Override
     @Transactional
     public void handle(UnassignTeacherFromClassroomsCommand command) {
-        for (Long classroomId : command.classroomIds()) {
-            enrollmentRepository.findByUserIdAndClassroomId(command.teacherId(), classroomId)
-                    .ifPresent(enrollmentRepository::delete);
-        }
+        removeUserFromClassrooms(command.teacherId(), "TEACHER", command.classroomIds());
     }
 
     @Override
     @Transactional
-    public void handle(UnenrollUserCommand command) {
-        var enrollment = enrollmentRepository.findByUserIdAndClassroomId(
-                        command.userId(), command.classroomId())
-                .orElseThrow(() -> new EnrollmentNotFoundException(command.userId(), command.classroomId()));
+    public void handle(UnenrollStudentFromClassroomsCommand command) {
+        removeUserFromClassrooms(command.studentId(), "STUDENT", command.classroomIds());
+    }
 
-        enrollmentRepository.delete(enrollment);
+    private void removeUserFromClassrooms(Long userId, String requiredRole, List<Long> classroomIds) {
+        String userName = iamContextFacade.fetchUserNameById(userId)
+                .orElseThrow(() -> new UserNotFoundException(userId));
+
+        if (!iamContextFacade.hasRole(userId, requiredRole)) {
+            throw new InvalidUserRoleException(userName, requiredRole);
+        }
+
+        for (Long classroomId : classroomIds) {
+            var enrollment = enrollmentRepository.findByUserIdAndClassroomId(userId, classroomId)
+                    .orElseThrow(EnrollmentNotFoundException::new);
+
+            if (enrollment.getClassroom().getAcademicYear().getStatus() == AcademicYearStatus.CLOSED) {
+                throw new CannotDeleteHistoricalDataException();
+            }
+
+            enrollmentRepository.delete(enrollment);
+        }
     }
 }

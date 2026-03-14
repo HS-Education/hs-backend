@@ -1,9 +1,7 @@
 package com.hs.hstesis.learning.domain.exceptions;
 
-public class EnrollmentNotFoundException extends RuntimeException {
-    public EnrollmentNotFoundException(Long userId, Long classroomId) {
-        super(String.format(
-                "Enrollment not found for user id %d in classroom id %d.",
-                userId, classroomId));
-    }
+import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
+
+public class EnrollmentNotFoundException extends ResourceNotFoundException {
+    public EnrollmentNotFoundException() { super("Enrollment not found."); }
 }

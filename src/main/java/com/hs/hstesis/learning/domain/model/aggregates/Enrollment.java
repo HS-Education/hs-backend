@@ -1,6 +1,5 @@
 package com.hs.hstesis.learning.domain.model.aggregates;
 
-import com.hs.hstesis.iam.domain.model.aggregates.User;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -16,8 +15,7 @@ public class Enrollment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
+    @Column(name = "user_id")
     private Long userId;
 
     @ManyToOne(optional = false)
