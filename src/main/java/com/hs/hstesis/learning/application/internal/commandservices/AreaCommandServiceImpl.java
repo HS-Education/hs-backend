@@ -8,8 +8,8 @@ import com.hs.hstesis.learning.domain.model.commands.UpdateAreaCommand;
 import com.hs.hstesis.learning.domain.model.entities.Area;
 import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.AreaCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.AreaRepository;
-import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.AreaRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.CourseRepository;
 import com.hs.hstesis.shared.domain.model.util.TextUtils;
 import org.springframework.stereotype.Service;
 

@@ -2,6 +2,7 @@ package com.hs.hstesis.learning.interfaces.rest;
 
 import com.hs.hstesis.learning.domain.model.commands.DeleteClassroomCommand;
 import com.hs.hstesis.learning.domain.model.commands.GenerateClassroomsCommand;
+import com.hs.hstesis.learning.domain.model.queries.GetAllClassroomsQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetClassroomByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetClassroomMembersQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetClassroomsByUserIdQuery;
@@ -45,13 +46,13 @@ public class ClassroomController {
     public ResponseEntity<MessageResource> generateAllClassrooms() {
         int totalCreated = classroomCommandService.handle(new GenerateClassroomsCommand());
         if (totalCreated == 0) {
-            return ResponseEntity.ok(new MessageResource("No new classrooms were created because they already exists."));
+            return ResponseEntity.ok(new MessageResource("No new classrooms were created (they already exist or no study plan is configured)"));
         }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new MessageResource(String.format("%d classrooms generated successfully", totalCreated)));
     }
 
-    @PreAuthorize("hasAuthority('CLASSROOM_READ')")
+    @PreAuthorize("hasAuthority('CLASSROOM_READ') and (@classroomSecurity.isMember(#classroomId) or hasRole('ADMIN') or hasRole('COORDINATOR'))")
     @Operation(description = "Retrieves a classroom.")
     @GetMapping("/{classroomId}")
     public ResponseEntity<ClassroomResource> getClassroomById(@PathVariable Long classroomId) {
@@ -59,22 +60,25 @@ public class ClassroomController {
         var classroom = classroomQueryService.handle(getClassroomByIdQuery);
 
         if(classroom.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.notFound().build();
         }
 
         var classroomResource = ClassroomResourceFromEntityAssembler.toResourceFromEntity(classroom.get());
         return ResponseEntity.ok(classroomResource);
     }
 
-    @PreAuthorize("hasAuthority('CLASSROOM_READ')")
-    @Operation(description = "Retrieves all classrooms associated with a user")
-    @GetMapping("/user")
-    public ResponseEntity<List<ClassroomResource>> getClassroomsByUserId(@RequestParam Long userId) {
-        var getClassroomsByUserIdQuery = new GetClassroomsByUserIdQuery(userId);
-        var classrooms = classroomQueryService.handle(getClassroomsByUserIdQuery);
+    @PreAuthorize("hasAuthority('CLASSROOM_READ') and (#userId == null ? hasRole('ADMIN') : (#userId == authentication.principal.id or hasRole('ADMIN')))")
+    @Operation(description = "Retrieves all classrooms or filters them by userId")
+    @GetMapping
+    public ResponseEntity<List<ClassroomResource>> getClassrooms(
+            @RequestParam(required = false) Long userId) {
+
+        var classrooms = (userId == null)
+                ? classroomQueryService.handle(new GetAllClassroomsQuery())
+                : classroomQueryService.handle(new GetClassroomsByUserIdQuery(userId));
 
         if (classrooms.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.notFound().build();
         }
 
         var resources = classrooms.stream()
@@ -84,7 +88,7 @@ public class ClassroomController {
         return ResponseEntity.ok(resources);
     }
 
-    @PreAuthorize("hasAuthority('CLASSROOM_MEMBERS_READ')")
+    @PreAuthorize("hasAuthority('CLASSROOM_MEMBERS_READ') and (@classroomSecurity.isMember(#classroomId) or hasRole('ADMIN') or hasRole('COORDINATOR'))")
     @Operation(description = "Retrieves all members of a classroom")
     @GetMapping("/{classroomId}/members")
     public ResponseEntity<List<EnrollmentResource>> getClassroomMembers(@PathVariable Long classroomId) {

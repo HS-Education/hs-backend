@@ -5,7 +5,7 @@ import com.hs.hstesis.learning.domain.model.aggregates.GradingPeriod;
 import com.hs.hstesis.learning.domain.model.commands.UpdateGradingPeriodCommand;
 import com.hs.hstesis.learning.domain.model.valueobjects.GradingPeriodStatus;
 import com.hs.hstesis.learning.domain.services.GradingPeriodCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.GradingPeriodRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.GradingPeriodRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

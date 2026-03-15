@@ -1,12 +1,13 @@
 package com.hs.hstesis.learning.application.internal.queryservices;
 
 import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
-import com.hs.hstesis.learning.application.querymodels.AreaWithCoordinator;
+import com.hs.hstesis.learning.application.querymodels.AreaWithCoordinatorQueryModel;
 import com.hs.hstesis.learning.domain.model.entities.Area;
+import com.hs.hstesis.learning.domain.model.queries.ExistsAreaByCoordinatorIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetAllAreasQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetAreaByIdQuery;
 import com.hs.hstesis.learning.domain.services.AreaQueryService;
-import com.hs.hstesis.learning.infrastructure.jpa.AreaRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.AreaRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,7 +26,7 @@ public class AreaQueryServiceImpl implements AreaQueryService {
     }
 
     @Override
-    public Optional<AreaWithCoordinator> handle(GetAreaByIdQuery query) {
+    public Optional<AreaWithCoordinatorQueryModel> handle(GetAreaByIdQuery query) {
 
         return areaRepository.findById(query.id())
                 .map(area -> {
@@ -33,13 +34,13 @@ public class AreaQueryServiceImpl implements AreaQueryService {
                             .fetchUserNameById(area.getCoordinatorId())
                             .orElse("Unknown");
 
-                    return new AreaWithCoordinator(area, username);
+                    return new AreaWithCoordinatorQueryModel(area, username);
                 });
     }
 
 
     @Override
-    public List<AreaWithCoordinator> handle(GetAllAreasQuery query) {
+    public List<AreaWithCoordinatorQueryModel> handle(GetAllAreasQuery query) {
         var areas = areaRepository.findAll();
 
         var coordinatorIds = areas.stream()
@@ -49,10 +50,15 @@ public class AreaQueryServiceImpl implements AreaQueryService {
         var usernames = iamContextFacade.fetchUserNamesByIds(coordinatorIds);
 
         return areas.stream()
-                .map(area -> new AreaWithCoordinator(
+                .map(area -> new AreaWithCoordinatorQueryModel(
                         area,
                         usernames.getOrDefault(area.getCoordinatorId(), "Unknown")
                 ))
                 .toList();
+    }
+
+    @Override
+    public boolean handle(ExistsAreaByCoordinatorIdQuery query){
+        return areaRepository.existsByCoordinatorId(query.coordinatorId());
     }
 }

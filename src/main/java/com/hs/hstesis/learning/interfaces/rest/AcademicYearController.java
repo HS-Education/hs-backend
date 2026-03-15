@@ -73,6 +73,10 @@ public class AcademicYearController {
         var getAllAcademicYearsQuery = new GetAllAcademicYearsQuery();
         var academicYears = academicYearQueryService.handle(getAllAcademicYearsQuery);
 
+        if (academicYears.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
         var resources = academicYears.stream()
                 .map(AcademicYearResourceFromEntityAssembler::toResourceFromEntity)
                 .toList();

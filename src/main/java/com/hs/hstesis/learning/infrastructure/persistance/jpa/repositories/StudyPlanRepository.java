@@ -1,4 +1,4 @@
-package com.hs.hstesis.learning.infrastructure.jpa;
+package com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories;
 
 import com.hs.hstesis.learning.domain.model.aggregates.StudyPlan;
 import com.hs.hstesis.learning.domain.model.valueobjects.EducationLevel;

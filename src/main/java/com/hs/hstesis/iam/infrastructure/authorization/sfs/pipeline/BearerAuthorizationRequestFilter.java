@@ -35,14 +35,10 @@ public class BearerAuthorizationRequestFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         try {
             String token = tokenService.getBearerTokenFrom(request);
-            //LOGGER.info("Extracted Token: {}", token);
             if (token != null && tokenService.validateToken(token)) {
                 String username = tokenService.getUsernameFromToken(token);
-                //LOGGER.info("Extracted Username: {}", username);
                 var userDetails = userDetailsService.loadUserByUsername(username);
-                //LOGGER.info("Loaded UserDetails: {}", userDetails);
                 SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationTokenBuilder.build(userDetails, request));
-                //LOGGER.info("Authentication set for user: {}", username);
             } else {
                 LOGGER.info("Token is not valid");
             }

@@ -8,8 +8,8 @@ import com.hs.hstesis.learning.domain.model.commands.AddCourseToStudyPlanCommand
 import com.hs.hstesis.learning.domain.model.commands.RemoveCourseFromStudyPlanCommand;
 import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.StudyPlanCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
-import com.hs.hstesis.learning.infrastructure.jpa.StudyPlanRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.CourseRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.StudyPlanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

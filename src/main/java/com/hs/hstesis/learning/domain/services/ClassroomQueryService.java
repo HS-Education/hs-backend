@@ -9,4 +9,5 @@ import java.util.Optional;
 public interface ClassroomQueryService {
     Optional<Classroom> handle(GetClassroomByIdQuery query);
     List<Classroom> handle(GetClassroomsByUserIdQuery query);
+    List<Classroom> handle(GetAllClassroomsQuery query);
 }

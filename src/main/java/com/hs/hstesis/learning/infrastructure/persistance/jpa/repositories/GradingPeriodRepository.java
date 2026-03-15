@@ -1,4 +1,4 @@
-package com.hs.hstesis.learning.infrastructure.jpa;
+package com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories;
 
 import com.hs.hstesis.learning.domain.model.aggregates.GradingPeriod;
 import org.springframework.data.jpa.repository.JpaRepository;

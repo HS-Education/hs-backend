@@ -4,6 +4,9 @@ import com.hs.hstesis.iam.domain.model.aggregates.User;
 import com.hs.hstesis.iam.domain.model.queries.GetUserByIdQuery;
 import com.hs.hstesis.iam.domain.model.queries.GetUsersByIdsQuery;
 import com.hs.hstesis.iam.domain.services.UserQueryService;
+import com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -14,7 +17,6 @@ import java.util.stream.Collectors;
 
 @Component
 public class IamContextFacade {
-
     private final UserQueryService userQueryService;
 
     public IamContextFacade(UserQueryService userQueryService) {
@@ -39,11 +41,7 @@ public class IamContextFacade {
     }
 
     public Map<Long, String> fetchUserNamesByIds(Set<Long> userIds) {
-        if (userIds == null || userIds.isEmpty()) return Map.of();
-        var query = new GetUsersByIdsQuery(userIds);
-        var users = userQueryService.handle(query);
-
-        return users.stream()
+        return fetchUsers(userIds).stream()
                 .collect(Collectors.toMap(
                         User::getId,
                         User::getName
@@ -70,15 +68,27 @@ public class IamContextFacade {
                 .toList();
     }
 
-    public boolean existsUserById(Long userId) {
-        return fetchUser(userId).isPresent();
-    }
-
     public boolean hasRole(Long userId, String roleName) {
         return fetchUser(userId)
                 .map(user -> user.getRoles()
                         .stream()
                         .anyMatch(role -> role.getRoleName().equals(roleName)))
                 .orElse(false);
+    }
+
+    public Long getAuthenticatedUserId() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new AuthenticationCredentialsNotFoundException("No user is currently logged in.");
+        }
+
+        var principal = authentication.getPrincipal();
+
+        if (principal instanceof UserDetailsImpl userDetails) {
+            return userDetails.getId();
+        }
+
+        throw new IllegalStateException("Cannot extract user id.");
     }
 }

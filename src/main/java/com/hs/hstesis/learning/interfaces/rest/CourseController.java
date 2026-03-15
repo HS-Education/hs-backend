@@ -67,7 +67,7 @@ public class CourseController {
                 : courseQueryService.handle(new GetCoursesByAreaIdQuery(areaId));
 
         if (courses.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.notFound().build();
         }
 
         var courseResources = courses.stream()

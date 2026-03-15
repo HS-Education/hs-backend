@@ -36,6 +36,11 @@ public class UserController {
     public ResponseEntity<List<UserResource>> getAllUsers() {
         var getAllUsersQuery = new GetAllUsersQuery();
         var users = userQueryService.handle(getAllUsersQuery);
+
+        if (users.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
         var userResources = users.stream()
                 .map(UserResourceFromEntityAssembler::toResourceFromEntity).
                 toList();

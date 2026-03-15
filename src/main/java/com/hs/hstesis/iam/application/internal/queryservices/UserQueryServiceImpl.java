@@ -7,7 +7,7 @@ import com.hs.hstesis.iam.domain.model.queries.GetUserNameByIdQuery;
 import com.hs.hstesis.iam.domain.model.queries.GetUsersByIdsQuery;
 import com.hs.hstesis.iam.domain.model.valueobjects.Roles;
 import com.hs.hstesis.iam.domain.services.UserQueryService;
-import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
+import com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories.UserRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

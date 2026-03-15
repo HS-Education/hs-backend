@@ -4,7 +4,7 @@ import com.hs.hstesis.learning.domain.model.aggregates.GradingPeriod;
 import com.hs.hstesis.learning.domain.model.queries.GetGradingPeriodByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetGradingPeriodsByAcademicYearIdQuery;
 import com.hs.hstesis.learning.domain.services.GradingPeriodQueryService;
-import com.hs.hstesis.learning.infrastructure.jpa.GradingPeriodRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.GradingPeriodRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

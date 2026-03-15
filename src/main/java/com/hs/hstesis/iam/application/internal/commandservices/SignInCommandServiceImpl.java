@@ -5,7 +5,7 @@ import com.hs.hstesis.iam.domain.model.aggregates.User;
 import com.hs.hstesis.iam.domain.model.commands.SignInCommand;
 import com.hs.hstesis.iam.domain.services.SignInCommandService;
 import com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
-import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
+import com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories.UserRepository;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;

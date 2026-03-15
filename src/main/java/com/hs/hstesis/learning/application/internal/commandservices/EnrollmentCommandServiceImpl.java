@@ -10,8 +10,8 @@ import com.hs.hstesis.learning.domain.model.commands.UnassignTeacherFromClassroo
 import com.hs.hstesis.learning.domain.model.commands.UnenrollStudentFromClassroomsCommand;
 import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
 import com.hs.hstesis.learning.domain.services.EnrollmentCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.ClassroomRepository;
-import com.hs.hstesis.learning.infrastructure.jpa.EnrollmentRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.ClassroomRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.EnrollmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

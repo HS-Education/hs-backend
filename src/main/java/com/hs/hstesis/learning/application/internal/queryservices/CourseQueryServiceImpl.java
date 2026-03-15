@@ -5,7 +5,7 @@ import com.hs.hstesis.learning.domain.model.queries.GetAllCoursesQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetCourseByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetCoursesByAreaIdQuery;
 import com.hs.hstesis.learning.domain.services.CourseQueryService;
-import com.hs.hstesis.learning.infrastructure.jpa.CourseRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.CourseRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

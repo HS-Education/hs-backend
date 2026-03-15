@@ -8,7 +8,7 @@ import com.hs.hstesis.learning.domain.model.commands.GenerateClassroomsCommand;
 import com.hs.hstesis.learning.domain.model.valueobjects.*;
 import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.ClassroomCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.*;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

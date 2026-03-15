@@ -4,8 +4,8 @@ import com.hs.hstesis.learning.domain.model.aggregates.Classroom;
 import com.hs.hstesis.learning.domain.model.aggregates.Enrollment;
 import com.hs.hstesis.learning.domain.model.queries.*;
 import com.hs.hstesis.learning.domain.services.ClassroomQueryService;
-import com.hs.hstesis.learning.infrastructure.jpa.ClassroomRepository;
-import com.hs.hstesis.learning.infrastructure.jpa.EnrollmentRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.ClassroomRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.EnrollmentRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -33,5 +33,10 @@ public class ClassroomQueryServiceImpl implements ClassroomQueryService {
                 .stream()
                 .map(Enrollment::getClassroom)
                 .toList();
+    }
+
+    @Override
+    public List<Classroom> handle(GetAllClassroomsQuery query) {
+        return classroomRepository.findAll();
     }
 }

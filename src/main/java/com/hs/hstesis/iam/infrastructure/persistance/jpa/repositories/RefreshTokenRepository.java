@@ -1,4 +1,4 @@
-package com.hs.hstesis.iam.infrastructure.persistance.jpa;
+package com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories;
 
 import com.hs.hstesis.iam.domain.model.aggregates.User;
 import com.hs.hstesis.iam.domain.model.entity.RefreshToken;

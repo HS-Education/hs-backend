@@ -1,14 +1,13 @@
 package com.hs.hstesis.learning.domain.services;
 
 import com.hs.hstesis.learning.domain.exceptions.AcademicYearIsActiveException;
-import com.hs.hstesis.learning.domain.exceptions.AcademicYearNotFoundException;
 import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
-import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
-import org.springframework.stereotype.Component;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.AcademicYearRepository;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 
-@Component
+@Service
 public class AcademicYearStateValidator {
     private final AcademicYearRepository academicYearRepository;
 

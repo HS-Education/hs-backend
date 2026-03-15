@@ -70,7 +70,7 @@ public class SectionController {
                 : sectionQueryService.handle(new GetAllSectionsQuery());
 
         if (sections.isEmpty()) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.notFound().build();
         }
 
         var resources = sections.stream()

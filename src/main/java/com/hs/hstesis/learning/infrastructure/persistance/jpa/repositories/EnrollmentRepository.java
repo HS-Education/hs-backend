@@ -1,4 +1,4 @@
-package com.hs.hstesis.learning.infrastructure.jpa;
+package com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories;
 
 import com.hs.hstesis.learning.domain.model.aggregates.Enrollment;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,6 +14,7 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
     Optional<Enrollment> findByUserIdAndClassroomId(Long userId, Long classroomId);
     boolean existsByUserIdAndClassroomId(Long userId, Long classroomId);
     boolean existsByClassroomIdAndRoleInClassroom(Long classroomId, String roleInClassroom);
+    boolean existsByUserIdAndRoleInClassroom(Long userId, String roleInClassroom);
 
     @Modifying
     @Transactional

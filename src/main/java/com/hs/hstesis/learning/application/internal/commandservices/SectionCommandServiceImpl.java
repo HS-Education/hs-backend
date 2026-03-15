@@ -8,7 +8,7 @@ import com.hs.hstesis.learning.domain.model.commands.DeleteSectionCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateSectionCommand;
 import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.SectionCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.SectionRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.SectionRepository;
 import com.hs.hstesis.shared.domain.model.util.TextUtils;
 import org.springframework.stereotype.Service;
 

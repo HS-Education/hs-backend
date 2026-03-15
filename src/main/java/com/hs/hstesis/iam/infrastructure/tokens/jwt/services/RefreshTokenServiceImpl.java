@@ -1,8 +1,8 @@
 package com.hs.hstesis.iam.infrastructure.tokens.jwt.services;
 
 import com.hs.hstesis.iam.domain.model.entity.RefreshToken;
-import com.hs.hstesis.iam.infrastructure.persistance.jpa.RefreshTokenRepository;
-import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
+import com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories.RefreshTokenRepository;
+import com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories.UserRepository;
 import com.hs.hstesis.iam.infrastructure.tokens.jwt.RefreshTokenService;
 import io.github.cdimascio.dotenv.Dotenv;
 import jakarta.servlet.http.Cookie;

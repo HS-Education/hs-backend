@@ -100,7 +100,10 @@ public class GlobalExceptionHandler {
             NoClassroomsDefinedException.class,
             InvalidUserRoleException.class,
             TeacherAlreadyAssignedException.class,
-            CannotRemoveLastAdminException.class
+            CannotRemoveLastAdminException.class,
+            UnauthorizedRoleAssignmentException.class,
+            IncompatibleRoleException.class,
+            RoleInUseException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());

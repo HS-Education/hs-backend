@@ -6,8 +6,8 @@ import com.hs.hstesis.learning.domain.model.commands.GenerateAcademicYearCommand
 import com.hs.hstesis.learning.domain.model.entities.AcademicYear;
 import com.hs.hstesis.learning.domain.model.valueobjects.Bimester;
 import com.hs.hstesis.learning.domain.services.AcademicYearCommandService;
-import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
-import com.hs.hstesis.learning.infrastructure.jpa.GradingPeriodRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.AcademicYearRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.GradingPeriodRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;

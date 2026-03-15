@@ -4,7 +4,7 @@ import com.hs.hstesis.learning.domain.model.aggregates.StudyPlan;
 import com.hs.hstesis.learning.domain.model.queries.GetStudyPlanByEducationLevelAndGradeLevelQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetStudyPlanByIdQuery;
 import com.hs.hstesis.learning.domain.services.StudyPlanQueryService;
-import com.hs.hstesis.learning.infrastructure.jpa.StudyPlanRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.StudyPlanRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

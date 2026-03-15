@@ -4,7 +4,7 @@ import com.hs.hstesis.learning.domain.model.entities.AcademicYear;
 import com.hs.hstesis.learning.domain.model.queries.GetAcademicYearByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetAllAcademicYearsQuery;
 import com.hs.hstesis.learning.domain.services.AcademicYearQueryService;
-import com.hs.hstesis.learning.infrastructure.jpa.AcademicYearRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.AcademicYearRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

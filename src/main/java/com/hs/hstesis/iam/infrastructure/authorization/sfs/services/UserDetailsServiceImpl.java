@@ -1,7 +1,7 @@
 package com.hs.hstesis.iam.infrastructure.authorization.sfs.services;
 
 import com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
-import com.hs.hstesis.iam.infrastructure.persistance.jpa.UserRepository;
+import com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories.UserRepository;
 import org.jspecify.annotations.NonNull;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

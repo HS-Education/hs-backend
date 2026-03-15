@@ -5,7 +5,7 @@ import com.hs.hstesis.learning.domain.model.queries.GetAllSectionsQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetSectionByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetSectionsByEducationAndGradeLevelQuery;
 import com.hs.hstesis.learning.domain.services.SectionQueryService;
-import com.hs.hstesis.learning.infrastructure.jpa.SectionRepository;
+import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.SectionRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
