@@ -8,6 +8,7 @@ import lombok.Setter;
 
 @Entity
 @Table(
+        name = "study_plans",
         uniqueConstraints = @UniqueConstraint(
                 columnNames = {"education_level","grade_level","course_id"}
         )

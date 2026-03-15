@@ -10,6 +10,7 @@ import lombok.Setter;
 
 @Entity
 @Table(
+        name = "sections",
         uniqueConstraints = @UniqueConstraint(
                 columnNames = {"education_level", "grade_level", "name"}
         )

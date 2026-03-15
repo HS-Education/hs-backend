@@ -35,3 +35,7 @@ bin/
 
 ### Target ###
 target/
+
+### Docker ###
+docker-compose.yml
+compose.yaml

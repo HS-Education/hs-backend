@@ -1,6 +1,7 @@
 services:
   pgvector:
     image: 'pgvector/pgvector:pg16'
+    container_name: postgres-vector
     environment:
       - 'POSTGRES_DB=hsdb'
       - 'POSTGRES_PASSWORD=12345678'
@@ -8,4 +9,4 @@ services:
     labels:
       - "org.springframework.boot.service-connection=postgres"
     ports:
-      - '5432'
+      - "55460:5432"

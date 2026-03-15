@@ -11,6 +11,7 @@ import java.time.LocalDate;
 
 @Entity
 @Table(
+        name = "grading_periods",
         uniqueConstraints = {
                 @UniqueConstraint(
                         columnNames = {"academic_year_id", "bimester"}
