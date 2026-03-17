@@ -1,17 +1,15 @@
 package com.hs.hstesis.learning.interfaces.rest;
 
 import com.hs.hstesis.learning.domain.model.commands.DeleteCourseCommand;
+import com.hs.hstesis.learning.domain.model.commands.RemoveTopicCommand;
 import com.hs.hstesis.learning.domain.model.queries.GetAllCoursesQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetCourseByIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetCoursesByAreaIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetTopicsByCourseIdQuery;
 import com.hs.hstesis.learning.domain.services.CourseCommandService;
 import com.hs.hstesis.learning.domain.services.CourseQueryService;
-import com.hs.hstesis.learning.interfaces.rest.resources.CourseResource;
-import com.hs.hstesis.learning.interfaces.rest.resources.CreateCourseResource;
-import com.hs.hstesis.learning.interfaces.rest.resources.UpdateCourseResource;
-import com.hs.hstesis.learning.interfaces.rest.transform.CourseResourceFromEntityAssembler;
-import com.hs.hstesis.learning.interfaces.rest.transform.CreateCourseCommandFromResourceAssembler;
-import com.hs.hstesis.learning.interfaces.rest.transform.UpdateCourseCommandFromResourceAssembler;
+import com.hs.hstesis.learning.interfaces.rest.resources.*;
+import com.hs.hstesis.learning.interfaces.rest.transform.*;
 import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping(value = "/api/v1/courses", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Courses", description = "Course management endpoints")
@@ -36,6 +33,7 @@ public class CourseController {
         this.courseQueryService = courseQueryService;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Create a new course.")
     @PostMapping()
     public ResponseEntity<CourseResource> createCourse(@RequestBody CreateCourseResource createCourseResource){
@@ -57,6 +55,7 @@ public class CourseController {
         return new ResponseEntity<>(courseResource, HttpStatus.CREATED);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Return a list of courses. Can be optionally filtered by areaId.")
     @GetMapping
     public ResponseEntity<List<CourseResource>> getCourses(
@@ -77,6 +76,7 @@ public class CourseController {
         return ResponseEntity.ok(courseResources);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Updates the details of an existing course.")
     @PatchMapping("/{courseId}")
     public ResponseEntity<CourseResource> updateCourse(@PathVariable Long courseId, @RequestBody UpdateCourseResource updateCourseResource) {
@@ -91,11 +91,53 @@ public class CourseController {
         return ResponseEntity.ok(courseResource);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Deletes an existing course.")
     @DeleteMapping("/{courseId}")
     public ResponseEntity<MessageResource> deleteCourse(@PathVariable Long courseId) {
         var deleteCourseCommand = new DeleteCourseCommand(courseId);
         courseCommandService.handle(deleteCourseCommand);
         return ResponseEntity.ok(new MessageResource("Course deleted successfully."));
+    }
+
+    @PreAuthorize("hasRole('COORDINATOR')")
+    @Operation(description = "Add a topic to a course.")
+    @PostMapping("/{courseId}/topics")
+    public ResponseEntity<Void> addTopic(@PathVariable Long courseId, @RequestBody AddTopicResource addTopicResource) {
+        var addTopicCommand = AddTopicCommandFromResourceAssembler.toCommandFromResource(courseId, addTopicResource);
+        courseCommandService.handle(addTopicCommand);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
+
+    @PreAuthorize("hasAuthority('TOPICS_READ')")
+    @Operation(description = "Get topics of a course.")
+    @GetMapping("/{courseId}/topics")
+    public ResponseEntity<List<TopicResource>> getTopics(@PathVariable Long courseId) {
+        var getTopicsByCourseIdQuery = new GetTopicsByCourseIdQuery(courseId);
+        var topics = courseQueryService.handle(getTopicsByCourseIdQuery);
+
+        var topicResources = topics.stream()
+                .map(TopicResourceFromEntityAssembler::toResourceFromEntity)
+                .toList();
+
+        return ResponseEntity.ok(topicResources);
+    }
+
+    @PreAuthorize("hasRole('COORDINATOR')")
+    @Operation(description = "Reorder topics in a course.")
+    @PutMapping("/{courseId}/topics/reorder")
+    public ResponseEntity<Void> reorderTopics(@PathVariable Long courseId, @RequestBody ReorderTopicsResource reorderTopicsResource) {
+        var reorderTopicsCommand = ReorderTopicCommandFromResourceAssembler.toCommandFromResource(courseId, reorderTopicsResource);
+        courseCommandService.handle(reorderTopicsCommand);
+        return ResponseEntity.ok().build();
+    }
+
+    @PreAuthorize("hasRole('COORDINATOR')")
+    @Operation(description = "Remove a topic from a course.")
+    @DeleteMapping("/{courseId}/topics/{topicId}")
+    public ResponseEntity<MessageResource> removeTopic(@PathVariable Long courseId, @PathVariable Long topicId) {
+        var removeTopicCommand = new RemoveTopicCommand(courseId, topicId);
+        courseCommandService.handle(removeTopicCommand);
+        return ResponseEntity.ok(new MessageResource("Topic removed successfully."));
     }
 }

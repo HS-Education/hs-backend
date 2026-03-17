@@ -4,15 +4,14 @@ import com.hs.hstesis.learning.domain.exceptions.AreaNotFoundException;
 import com.hs.hstesis.learning.domain.exceptions.CourseNameAlreadyException;
 import com.hs.hstesis.learning.domain.exceptions.CourseNotFoundException;
 import com.hs.hstesis.learning.domain.model.aggregates.Course;
-import com.hs.hstesis.learning.domain.model.commands.CreateCourseCommand;
-import com.hs.hstesis.learning.domain.model.commands.DeleteCourseCommand;
-import com.hs.hstesis.learning.domain.model.commands.UpdateCourseCommand;
+import com.hs.hstesis.learning.domain.model.commands.*;
 import com.hs.hstesis.learning.domain.services.AcademicYearStateValidator;
 import com.hs.hstesis.learning.domain.services.CourseCommandService;
 import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.AreaRepository;
 import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.CourseRepository;
 import com.hs.hstesis.shared.domain.model.util.TextUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 
@@ -51,7 +50,7 @@ public class CourseCommandServiceImpl implements CourseCommandService {
     @Override
     public Optional<Course> handle(UpdateCourseCommand command){
         var course = courseRepository.findById(command.id())
-                .orElseThrow(() -> new AreaNotFoundException(command.id()));
+                .orElseThrow(() -> new CourseNotFoundException(command.id()));
 
         if (command.name() != null) {
             String newNormalizedName = TextUtils.normalize(command.name());
@@ -82,5 +81,35 @@ public class CourseCommandServiceImpl implements CourseCommandService {
         }
 
         courseRepository.deleteById(command.id());
+    }
+
+    @Override
+    @Transactional
+    public void handle(AddTopicCommand command) {
+        Course course = courseRepository.findById(command.courseId())
+                .orElseThrow(() -> new CourseNotFoundException(command.courseId()));
+
+        course.addTopic(command.name());
+        courseRepository.save(course);
+    }
+
+    @Override
+    @Transactional
+    public void handle(ReorderTopicsCommand command) {
+        Course course = courseRepository.findById(command.courseId())
+                .orElseThrow(() -> new CourseNotFoundException(command.courseId()));
+
+        course.reorderTopics(command.topicIdsInOrder());
+        courseRepository.save(course);
+    }
+
+    @Override
+    @Transactional
+    public void handle(RemoveTopicCommand command) {
+        Course course = courseRepository.findById(command.courseId())
+                .orElseThrow(() -> new CourseNotFoundException(command.courseId()));
+
+        course.removeTopic(command.topicId());
+        courseRepository.save(course);
     }
 }

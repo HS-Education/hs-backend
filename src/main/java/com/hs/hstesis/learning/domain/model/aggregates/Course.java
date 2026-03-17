@@ -1,5 +1,7 @@
 package com.hs.hstesis.learning.domain.model.aggregates;
 
+import com.hs.hstesis.learning.domain.exceptions.TopicNotFoundException;
+import com.hs.hstesis.learning.domain.model.commands.AddTopicCommand;
 import com.hs.hstesis.learning.domain.model.commands.CreateCourseCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateCourseCommand;
 import com.hs.hstesis.learning.domain.model.entities.Area;
@@ -10,6 +12,8 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Entity
 @Setter
@@ -29,6 +33,7 @@ public class Course {
     private Area area;
 
     @OneToMany(mappedBy = "course", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("orderIndex ASC")
     private List<Topic> topics = new ArrayList<>();
 
     protected Course() {}
@@ -48,8 +53,34 @@ public class Course {
         this.name = name;
     }
 
-    public void addTopic(String name, Integer orderIndex) {
-        Topic topic = new Topic(this, name, orderIndex);
+    public void addTopic(String name) {
+        int nextIndex = topics.size() + 1;
+        Topic topic = new Topic(this, name.trim(), nextIndex);
         topics.add(topic);
+    }
+
+    public void removeTopic(Long topicId) {
+        Topic topic = topics.stream()
+                .filter(t -> topicId.equals(t.getId()))
+                .findFirst()
+                .orElseThrow(() -> new TopicNotFoundException(topicId));
+
+        topics.remove(topic);
+    }
+
+    public void reorderTopics(List<Long> topicIdsInOrder) {
+        Map<Long, Topic> topicMap = topics.stream()
+                .collect(Collectors.toMap(Topic::getId, t -> t));
+
+        for (int i = 0; i < topicIdsInOrder.size(); i++) {
+            Long topicId = topicIdsInOrder.get(i);
+            Topic topic = topicMap.get(topicId);
+
+            if (topic == null) {
+                throw new TopicNotFoundException(topicId);
+            }
+
+            topic.updateOrderIndex(i + 1);
+        }
     }
 }

@@ -51,11 +51,12 @@ public class UserRoleSeedCommandServiceImpl implements UserRoleCommandService {
     public void handle(SeedUserRoleCommand command) {
         Permission classroomRead = createPermissionIfNotFound(Permissions.CLASSROOM_READ);
         Permission classroomMembersRead = createPermissionIfNotFound(Permissions.CLASSROOM_MEMBERS_READ);
+        Permission topicsRead = createPermissionIfNotFound(Permissions.TOPICS_READ);
 
-        createRoleIfNotFound(Roles.ROLE_STUDENT, Set.of(classroomRead, classroomMembersRead));
-        createRoleIfNotFound(Roles.ROLE_TEACHER, Set.of(classroomRead, classroomMembersRead));
-        createRoleIfNotFound(Roles.ROLE_COORDINATOR, Set.of(classroomRead, classroomMembersRead));
-        createRoleIfNotFound(Roles.ROLE_ADMIN, Set.of(classroomRead, classroomMembersRead));
+        createRoleIfNotFound(Roles.ROLE_STUDENT, Set.of(classroomRead, classroomMembersRead, topicsRead));
+        createRoleIfNotFound(Roles.ROLE_TEACHER, Set.of(classroomRead, classroomMembersRead, topicsRead));
+        createRoleIfNotFound(Roles.ROLE_COORDINATOR, Set.of(classroomRead, classroomMembersRead, topicsRead));
+        createRoleIfNotFound(Roles.ROLE_ADMIN, Set.of(classroomRead, classroomMembersRead, topicsRead));
 
         String STUDENT_USERNAME = dotenv.get("STUDENT_USERNAME");
         String TEACHER_USERNAME = dotenv.get("TEACHER_USERNAME");

@@ -8,7 +8,7 @@ import lombok.Getter;
 @Getter
 @Table(name = "topics",
         indexes = {
-                @Index(name = "idx_topics_course", columnList = "course_id")
+                @Index(name = "idx_topics_course_order", columnList = "course_id, order_index")
         })
 public class Topic {
 
@@ -34,4 +34,7 @@ public class Topic {
         this.orderIndex = orderIndex;
     }
 
+    public void updateOrderIndex(Integer orderIndex) {
+        this.orderIndex = orderIndex;
+    }
 }
