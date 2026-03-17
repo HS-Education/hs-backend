@@ -127,7 +127,7 @@ public class CourseController {
     @Operation(description = "Reorder topics in a course.")
     @PutMapping("/{courseId}/topics/reorder")
     public ResponseEntity<Void> reorderTopics(@PathVariable Long courseId, @RequestBody ReorderTopicsResource reorderTopicsResource) {
-        var reorderTopicsCommand = ReorderTopicCommandFromResourceAssembler.toCommandFromResource(courseId, reorderTopicsResource);
+        var reorderTopicsCommand = ReorderTopicsCommandFromResourceAssembler.toCommandFromResource(courseId, reorderTopicsResource);
         courseCommandService.handle(reorderTopicsCommand);
         return ResponseEntity.ok().build();
     }
