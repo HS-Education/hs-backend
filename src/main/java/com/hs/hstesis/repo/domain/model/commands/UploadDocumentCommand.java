@@ -5,7 +5,7 @@ import com.hs.hstesis.repo.domain.model.valueobjects.DocumentType;
 
 public record UploadDocumentCommand(
         String title,
-        Long uploadedByUserId,
+        Long authorId,
         Long topicId,
         DocumentType type,
         DocumentFormat format,
@@ -17,8 +17,8 @@ public record UploadDocumentCommand(
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("Title cannot be null or blank");
         }
-        if (uploadedByUserId == null || uploadedByUserId <= 0) {
-            throw new IllegalArgumentException("User id cannot be null or negative.");
+        if (authorId == null || authorId <= 0) {
+            throw new IllegalArgumentException("Author id cannot be null or negative.");
         }
         if (topicId == null || topicId <= 0) {
             throw new IllegalArgumentException("Topic id cannot be null or negative.");

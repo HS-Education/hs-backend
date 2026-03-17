@@ -2,23 +2,23 @@ package com.hs.hstesis.repo.domain.model.aggregates;
 
 import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.model.entities.DocumentChunk;
-import com.hs.hstesis.repo.domain.model.valueobjects.DocumentFormat;
-import com.hs.hstesis.repo.domain.model.valueobjects.DocumentStatus;
-import com.hs.hstesis.repo.domain.model.valueobjects.DocumentType;
-import com.hs.hstesis.repo.domain.model.valueobjects.FileStorageInfo;
+import com.hs.hstesis.repo.domain.model.entities.DocumentTarget;
+import com.hs.hstesis.repo.domain.model.valueobjects.*;
 import com.hs.hstesis.shared.domain.model.aggregates.AuditableAbstractAggregateRoot;
 import jakarta.persistence.*;
 import lombok.Getter;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Getter
 @Table(name = "documents",
         indexes = {
                 @Index(name = "idx_documents_topic", columnList = "topic_id"),
-                @Index(name = "idx_documents_user", columnList = "uploaded_by"),
+                @Index(name = "idx_documents_author", columnList = "author_id"),
                 @Index(name = "idx_documents_status", columnList = "status")
         })
 public class Document extends AuditableAbstractAggregateRoot<Document> {
@@ -26,8 +26,8 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
     @Column(nullable = false, length = 200)
     private String title;
 
-    @Column(name = "uploaded_by", nullable = false)
-    private Long uploadedByUserId;
+    @Column(name = "author_id", nullable = false)
+    private Long authorId;
 
     @Column(name = "topic_id", nullable = false)
     private Long topicId;
@@ -55,11 +55,14 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<DocumentChunk> chunks = new ArrayList<>();
 
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<DocumentTarget> targets = new HashSet<>();
+
     public Document() {}
 
     public Document(UploadDocumentCommand command) {
         this.title = command.title();
-        this.uploadedByUserId = command.uploadedByUserId();
+        this.authorId = command.authorId();
         this.topicId = command.topicId();
         this.type = command.type();
         this.format = command.format();
@@ -79,5 +82,16 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
 
     public void removeChunk(DocumentChunk chunk) {
         chunks.remove(chunk);
+    }
+
+    public void addTarget(EducationLevel level, GradeLevel grade, Long courseId) {
+        DocumentTargetId id = new DocumentTargetId(this.getId(), level, grade, courseId);
+
+        boolean exists = targets.stream()
+                .anyMatch(t -> t.getId().equals(id));
+
+        if (!exists) {
+            targets.add(new DocumentTarget(this, level, grade, courseId));
+        }
     }
 }
