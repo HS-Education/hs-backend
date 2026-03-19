@@ -2,23 +2,26 @@ package com.hs.hstesis.repo.domain.model.commands;
 
 import com.hs.hstesis.repo.domain.model.valueobjects.DocumentFormat;
 import com.hs.hstesis.repo.domain.model.valueobjects.DocumentType;
+import com.hs.hstesis.repo.domain.model.valueobjects.EducationLevel;
+import com.hs.hstesis.repo.domain.model.valueobjects.GradeLevel;
+
+import java.util.List;
 
 public record UploadDocumentCommand(
         String title,
-        Long authorId,
         Long topicId,
         DocumentType type,
         DocumentFormat format,
         String originalFileName,
         String objectKey,
-        String fileChecksum
+        String fileChecksum,
+        EducationLevel educationLevel,
+        List<GradeLevel> gradeLevels,
+        Long courseId
 ) {
     public UploadDocumentCommand {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("Title cannot be null or blank");
-        }
-        if (authorId == null || authorId <= 0) {
-            throw new IllegalArgumentException("Author id cannot be null or negative.");
         }
         if (topicId == null || topicId <= 0) {
             throw new IllegalArgumentException("Topic id cannot be null or negative.");
@@ -37,6 +40,15 @@ public record UploadDocumentCommand(
         }
         if (fileChecksum == null || fileChecksum.isBlank()) {
             throw new IllegalArgumentException("File checksum cannot be null or blank");
+        }
+        if (educationLevel == null) {
+            throw new IllegalArgumentException("Education level cannot be null.");
+        }
+        if (gradeLevels == null || gradeLevels.isEmpty()) {
+            throw new IllegalArgumentException("Grades cannot be null.");
+        }
+        if (courseId == null || courseId <= 0) {
+            throw new IllegalArgumentException("Course id cannot be null or negative.");
         }
     }
 }

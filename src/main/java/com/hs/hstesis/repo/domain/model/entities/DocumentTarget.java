@@ -36,6 +36,6 @@ public class DocumentTarget {
                           Long courseId) {
         this.document = document;
 
-        this.id = new DocumentTargetId(document.getId(), educationLevel, gradeLevel, courseId);
+        this.id = new DocumentTargetId(null, educationLevel, gradeLevel, courseId);
     }
 }

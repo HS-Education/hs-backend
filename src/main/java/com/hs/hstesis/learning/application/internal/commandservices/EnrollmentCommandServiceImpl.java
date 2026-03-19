@@ -1,6 +1,6 @@
 package com.hs.hstesis.learning.application.internal.commandservices;
 
-import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
+import com.hs.hstesis.learning.application.internal.outboundservices.acl.ExternalIamService;
 import com.hs.hstesis.learning.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.model.aggregates.Classroom;
 import com.hs.hstesis.learning.domain.model.aggregates.Enrollment;
@@ -23,14 +23,14 @@ import java.util.Set;
 public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
     private final EnrollmentRepository enrollmentRepository;
     private final ClassroomRepository classroomRepository;
-    private final IamContextFacade iamContextFacade;
+    private final ExternalIamService externalIamService;
 
     public EnrollmentCommandServiceImpl(EnrollmentRepository enrollmentRepository,
                                         ClassroomRepository classroomRepository,
-                                        IamContextFacade  iamContextFacade) {
+                                        ExternalIamService  externalIamService) {
         this.enrollmentRepository = enrollmentRepository;
         this.classroomRepository = classroomRepository;
-        this.iamContextFacade = iamContextFacade;
+        this.externalIamService = externalIamService;
     }
 
     @Override
@@ -51,12 +51,12 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
 
         Set<Long> uniqueStudentIds = new HashSet<>(command.studentIds());
 
-        var missingUsers = iamContextFacade.getMissingUsers(uniqueStudentIds);
+        var missingUsers = externalIamService.getMissingUsers(uniqueStudentIds);
         if (!missingUsers.isEmpty()) {
             throw new UserNotFoundException(missingUsers);
         }
 
-        var invalidUsers = iamContextFacade.getUserNamesWithoutRole(uniqueStudentIds, "STUDENT");
+        var invalidUsers = externalIamService.getUserNamesWithoutRole(uniqueStudentIds, "STUDENT");
         if (!invalidUsers.isEmpty()) {
             throw new InvalidUserRoleException(invalidUsers.getFirst(), "STUDENT");
         }
@@ -78,10 +78,10 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
     @Override
     @Transactional
     public void handle(AssignTeacherToClassroomsCommand command) {
-        String teacherName = iamContextFacade.fetchUserNameById(command.teacherId())
+        String teacherName = externalIamService.fetchUserNameById(command.teacherId())
                 .orElseThrow(() -> new UserNotFoundException(command.teacherId()));
 
-        if (!iamContextFacade.hasRole(command.teacherId(), "TEACHER")) {
+        if (!externalIamService.hasRole(command.teacherId(), "TEACHER")) {
             throw new InvalidUserRoleException(teacherName, "TEACHER");
         }
 
@@ -130,10 +130,10 @@ public class EnrollmentCommandServiceImpl implements EnrollmentCommandService {
     }
 
     private void removeUserFromClassrooms(Long userId, String requiredRole, List<Long> classroomIds) {
-        String userName = iamContextFacade.fetchUserNameById(userId)
+        String userName = externalIamService.fetchUserNameById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        if (!iamContextFacade.hasRole(userId, requiredRole)) {
+        if (!externalIamService.hasRole(userId, requiredRole)) {
             throw new InvalidUserRoleException(userName, requiredRole);
         }
 

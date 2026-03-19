@@ -1,3 +1,4 @@
+
 package com.hs.hstesis.learning.domain.model.aggregates;
 
 import com.hs.hstesis.learning.domain.model.entities.AcademicYear;

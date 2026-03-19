@@ -1,6 +1,7 @@
 package com.hs.hstesis.learning.application.internal.queryservices;
 
 import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
+import com.hs.hstesis.learning.application.internal.outboundservices.acl.ExternalIamService;
 import com.hs.hstesis.learning.application.querymodels.AreaWithCoordinatorQueryModel;
 import com.hs.hstesis.learning.domain.model.entities.Area;
 import com.hs.hstesis.learning.domain.model.queries.ExistsAreaByCoordinatorIdQuery;
@@ -17,12 +18,12 @@ import java.util.stream.Collectors;
 @Service
 public class AreaQueryServiceImpl implements AreaQueryService {
     private final AreaRepository areaRepository;
-    private final IamContextFacade iamContextFacade;
+    private final ExternalIamService externalIamService;
 
     public AreaQueryServiceImpl(AreaRepository areaRepository,
-                                IamContextFacade iamContextFacade) {
+                                ExternalIamService externalIamService) {
         this.areaRepository = areaRepository;
-        this.iamContextFacade = iamContextFacade;
+        this.externalIamService = externalIamService;
     }
 
     @Override
@@ -30,7 +31,7 @@ public class AreaQueryServiceImpl implements AreaQueryService {
 
         return areaRepository.findById(query.id())
                 .map(area -> {
-                    var username = iamContextFacade
+                    var username = externalIamService
                             .fetchUserNameById(area.getCoordinatorId())
                             .orElse("Unknown");
 
@@ -47,7 +48,7 @@ public class AreaQueryServiceImpl implements AreaQueryService {
                 .map(Area::getCoordinatorId)
                 .collect(Collectors.toSet());
 
-        var usernames = iamContextFacade.fetchUserNamesByIds(coordinatorIds);
+        var usernames = externalIamService.fetchUserNamesByIds(coordinatorIds);
 
         return areas.stream()
                 .map(area -> new AreaWithCoordinatorQueryModel(

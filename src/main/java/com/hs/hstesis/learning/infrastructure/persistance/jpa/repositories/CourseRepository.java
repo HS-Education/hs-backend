@@ -13,4 +13,10 @@ public interface CourseRepository extends JpaRepository<Course, Long> {
 
     @Query("SELECT t FROM Topic t WHERE t.course.id = :courseId ORDER BY t.orderIndex ASC")
     List<Topic> findByCourseIdOrderByOrderIndex(Long courseId);
+
+    @Query("SELECT COUNT(t) > 0 FROM Topic t WHERE t.id = :topicId AND t.course.id = :courseId")
+    boolean existsTopicInCourse(Long topicId, Long courseId);
+
+    @Query("SELECT COUNT(c) > 0 FROM Course c WHERE c.id = :courseId AND c.area.coordinatorId = :coordinatorId")
+    boolean existsByIdAndCoordinatorId(Long courseId, Long coordinatorId);
 }

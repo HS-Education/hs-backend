@@ -2,10 +2,7 @@ package com.hs.hstesis.learning.application.internal.queryservices;
 
 import com.hs.hstesis.learning.domain.model.aggregates.Course;
 import com.hs.hstesis.learning.domain.model.entities.Topic;
-import com.hs.hstesis.learning.domain.model.queries.GetAllCoursesQuery;
-import com.hs.hstesis.learning.domain.model.queries.GetCourseByIdQuery;
-import com.hs.hstesis.learning.domain.model.queries.GetCoursesByAreaIdQuery;
-import com.hs.hstesis.learning.domain.model.queries.GetTopicsByCourseIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.*;
 import com.hs.hstesis.learning.domain.services.CourseQueryService;
 import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.CourseRepository;
 import org.springframework.stereotype.Service;
@@ -39,5 +36,15 @@ public class CourseQueryServiceImpl implements CourseQueryService {
     @Override
     public List<Topic> handle(GetTopicsByCourseIdQuery query) {
         return courseRepository.findByCourseIdOrderByOrderIndex(query.courseId());
+    }
+
+    @Override
+    public boolean handle(ExistsTopicInCourseQuery query) {
+        return courseRepository.existsTopicInCourse(query.topicId(), query.courseId());
+    }
+
+    @Override
+    public boolean handle(ExistsCourseForCoordinatorQuery query) {
+        return courseRepository.existsByIdAndCoordinatorId(query.courseId(), query.coordinatorId());
     }
 }

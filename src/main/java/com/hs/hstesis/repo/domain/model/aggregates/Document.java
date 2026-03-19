@@ -60,18 +60,19 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
 
     public Document() {}
 
-    public Document(UploadDocumentCommand command) {
-        this.title = command.title();
-        this.authorId = command.authorId();
-        this.topicId = command.topicId();
-        this.type = command.type();
-        this.format = command.format();
+    public Document(String title, Long authorId, Long topicId,
+                    DocumentType type, DocumentFormat format, String originalFileName,
+                    String objectKey, String fileChecksum) {
+        this.title = title;
+        this.authorId = authorId;
+        this.topicId = topicId;
+        this.type = type;
+        this.format = format;
         this.status = DocumentStatus.UPLOADED;
-
         this.fileStorageInfo = new FileStorageInfo(
-                command.originalFileName(),
-                command.objectKey(),
-                command.fileChecksum()
+                originalFileName,
+                objectKey,
+                fileChecksum
         );
     }
 
@@ -84,14 +85,14 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
         chunks.remove(chunk);
     }
 
-    public void addTarget(EducationLevel level, GradeLevel grade, Long courseId) {
-        DocumentTargetId id = new DocumentTargetId(this.getId(), level, grade, courseId);
-
-        boolean exists = targets.stream()
-                .anyMatch(t -> t.getId().equals(id));
-
-        if (!exists) {
-            targets.add(new DocumentTarget(this, level, grade, courseId));
+    public void addTargets(EducationLevel level, List<GradeLevel> grades, Long courseId) {
+        for (GradeLevel grade : grades) {
+            addTarget(level, grade, courseId);
         }
     }
+
+    private void addTarget(EducationLevel level, GradeLevel grade, Long courseId) {
+        targets.add(new DocumentTarget(this, level, grade, courseId));
+    }
+
 }

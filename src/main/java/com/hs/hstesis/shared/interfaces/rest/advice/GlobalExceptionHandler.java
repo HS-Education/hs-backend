@@ -3,6 +3,10 @@ package com.hs.hstesis.shared.interfaces.rest.advice;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.hs.hstesis.iam.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.exceptions.*;
+import com.hs.hstesis.repo.domain.exceptions.CoordinatorDoesNotOwnCourseException;
+import com.hs.hstesis.repo.domain.exceptions.CoordinatorNotAssignedToAnyAreaException;
+import com.hs.hstesis.repo.domain.exceptions.DocumentWithoutTargetsException;
+import com.hs.hstesis.repo.domain.exceptions.TopicDoesNotBelongToCourseException;
 import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
 import com.hs.hstesis.shared.interfaces.rest.resources.ApiErrorResponse;
 import org.slf4j.Logger;
@@ -103,7 +107,11 @@ public class GlobalExceptionHandler {
             CannotRemoveLastAdminException.class,
             UnauthorizedRoleAssignmentException.class,
             IncompatibleRoleException.class,
-            RoleInUseException.class
+            RoleInUseException.class,
+            CoordinatorNotAssignedToAnyAreaException.class,
+            CoordinatorDoesNotOwnCourseException.class,
+            TopicDoesNotBelongToCourseException.class,
+            DocumentWithoutTargetsException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());

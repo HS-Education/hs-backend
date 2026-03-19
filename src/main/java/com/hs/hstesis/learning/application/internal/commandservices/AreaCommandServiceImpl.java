@@ -1,6 +1,6 @@
 package com.hs.hstesis.learning.application.internal.commandservices;
 
-import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
+import com.hs.hstesis.learning.application.internal.outboundservices.acl.ExternalIamService;
 import com.hs.hstesis.learning.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.model.commands.CreateAreaCommand;
 import com.hs.hstesis.learning.domain.model.commands.DeleteAreaCommand;
@@ -20,16 +20,16 @@ public class AreaCommandServiceImpl implements AreaCommandService {
     private final AreaRepository areaRepository;
     private final CourseRepository courseRepository;
     private final AcademicYearStateValidator yearValidator;
-    private final IamContextFacade iamContextFacade;
+    private final ExternalIamService externalIamService;
 
     public AreaCommandServiceImpl(AreaRepository areaRepository,
                                   CourseRepository courseRepository,
                                   AcademicYearStateValidator yearValidator,
-                                  IamContextFacade iamContextFacade) {
+                                  ExternalIamService externalIamService) {
         this.areaRepository = areaRepository;
         this.courseRepository = courseRepository;
         this.yearValidator = yearValidator;
-        this.iamContextFacade = iamContextFacade;
+        this.externalIamService = externalIamService;
     }
 
     @Override
@@ -96,10 +96,10 @@ public class AreaCommandServiceImpl implements AreaCommandService {
     }
 
     private void validateCoordinator(Long userId, Long currentAreaId) {
-        String userName = iamContextFacade.fetchUserNameById(userId)
+        String userName = externalIamService.fetchUserNameById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
 
-        if (!iamContextFacade.hasRole(userId, "COORDINATOR")) {
+        if (!externalIamService.hasRole(userId, "COORDINATOR")) {
             throw new InvalidUserRoleException(userName, "COORDINATOR");
         }
 

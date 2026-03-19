@@ -1,5 +1,6 @@
 package com.hs.hstesis.iam.application.internal.commandservices;
 
+import com.hs.hstesis.iam.application.internal.outboundservices.acl.ExternalLearningService;
 import com.hs.hstesis.iam.domain.exceptions.*;
 import com.hs.hstesis.iam.domain.model.commands.AddRoleToUserCommand;
 import com.hs.hstesis.iam.domain.model.commands.RemoveRoleFromUserCommand;
@@ -14,14 +15,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserCommandServiceImpl implements UserCommandService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final LearningContextFacade learningContextFacade;
+    private final ExternalLearningService externalLearningService;
 
     public UserCommandServiceImpl(UserRepository userRepository,
                                   RoleRepository roleRepository,
-                                  LearningContextFacade learningContextFacade) {
+                                  ExternalLearningService externalLearningService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
-        this.learningContextFacade = learningContextFacade;
+        this.externalLearningService = externalLearningService;
     }
 
     @Override
@@ -73,12 +74,12 @@ public class UserCommandServiceImpl implements UserCommandService {
                 }
             }
             case "COORDINATOR" -> {
-                if (learningContextFacade.isCoordinatorAssignedToAnyArea(user.getId())) {
+                if (externalLearningService.isCoordinatorAssignedToAnyArea(user.getId())) {
                     throw new RoleInUseException("COORDINATOR", "area");
                 }
             }
             case "TEACHER" -> {
-                if (learningContextFacade.isTeacherAssignedToAnyClassroom(user.getId())) {
+                if (externalLearningService.isTeacherAssignedToAnyClassroom(user.getId())) {
                     throw new RoleInUseException("TEACHER", "classroom");
                 }
             }
