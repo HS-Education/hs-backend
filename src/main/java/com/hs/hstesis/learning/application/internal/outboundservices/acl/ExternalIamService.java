@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-@Service
+@Service("learningExternalIamService")
 public class ExternalIamService {
     private final IamContextFacade iamContextFacade;
 

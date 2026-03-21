@@ -7,4 +7,5 @@ public interface FileStorageService {
     String calculateChecksum(MultipartFile file);
     void upload(MultipartFile file, String objectKey);
     String generatePresignedUrl(String objectKey);
+    void delete(String objectKey);
 }

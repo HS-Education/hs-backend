@@ -3,7 +3,7 @@ package com.hs.hstesis.repo.application.internal.outboundservices.acl;
 import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
 import org.springframework.stereotype.Service;
 
-@Service
+@Service("repoExternalIamService")
 public class ExternalIamService {
     private final IamContextFacade iamContextFacade;
 

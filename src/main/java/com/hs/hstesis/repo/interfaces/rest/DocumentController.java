@@ -2,12 +2,12 @@ package com.hs.hstesis.repo.interfaces.rest;
 
 import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.model.queries.GetAccessibleDocumentsQuery;
+import com.hs.hstesis.repo.domain.model.queries.GetDocumentByIdQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentDownloadQuery;
 import com.hs.hstesis.repo.domain.model.valueobjects.DocumentFormat;
 import com.hs.hstesis.repo.domain.model.valueobjects.DocumentType;
 import com.hs.hstesis.repo.domain.services.DocumentCommandService;
 import com.hs.hstesis.repo.domain.services.DocumentQueryService;
-import com.hs.hstesis.repo.domain.services.FileStorageService;
 import com.hs.hstesis.repo.interfaces.rest.resources.DocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.DownloadDocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.UploadDocumentResource;
@@ -29,47 +29,43 @@ import java.util.List;
 public class DocumentController {
     private final DocumentCommandService documentCommandService;
     private final DocumentQueryService documentQueryService;
-    private final FileStorageService fileStorageService;
 
     public DocumentController(DocumentCommandService documentCommandService,
-                              DocumentQueryService documentQueryService,
-                              FileStorageService fileStorageService) {
+                              DocumentQueryService documentQueryService) {
         this.documentCommandService = documentCommandService;
         this.documentQueryService = documentQueryService;
-        this.fileStorageService = fileStorageService;
     }
 
     @PreAuthorize("hasRole('COORDINATOR')")
     @Operation(description = "Uploads a new document to the repository.")
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Void> uploadDocument(
+    public ResponseEntity<DocumentResource> uploadDocument(
             @PathVariable Long courseId,
             @RequestPart("file") MultipartFile file,
             @RequestPart("data") UploadDocumentResource resource) {
-
-        String objectKey = fileStorageService.generateObjectKey(file.getOriginalFilename(), resource.topicId());
-        String checksum = fileStorageService.calculateChecksum(file);
-
-        fileStorageService.upload(file, objectKey);
-
-        DocumentFormat format = DocumentFormat.fromFileName(file.getOriginalFilename());
 
         var uploadDocumentCommand = new UploadDocumentCommand(
                 resource.title(),
                 resource.topicId(),
                 DocumentType.ACADEMIC,
-                format,
+                DocumentFormat.fromFileName(file.getOriginalFilename()),
                 file.getOriginalFilename(),
-                objectKey,
-                checksum,
                 resource.educationLevel(),
                 resource.gradeLevels(),
                 courseId
         );
 
-        documentCommandService.handle(uploadDocumentCommand);
+        var documentId = documentCommandService.handle(uploadDocumentCommand, file);
 
-        return ResponseEntity.status(HttpStatus.CREATED).build();
+        var getDocumentByIdQuery = new GetDocumentByIdQuery(documentId);
+        var document = documentQueryService.handle(getDocumentByIdQuery);
+
+        if (document.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        var documentResource = DocumentResourceFromEntityAssembler.toResourceFromEntity(document.get());
+        return new ResponseEntity<>(documentResource, HttpStatus.CREATED);
     }
 
     @PreAuthorize("hasAuthority('REPOSITORY_READ')")

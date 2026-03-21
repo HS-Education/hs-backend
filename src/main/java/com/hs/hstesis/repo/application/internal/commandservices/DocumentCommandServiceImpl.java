@@ -2,31 +2,41 @@ package com.hs.hstesis.repo.application.internal.commandservices;
 
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalIamService;
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalLearningService;
-import com.hs.hstesis.repo.domain.exceptions.CoordinatorDoesNotOwnCourseException;
-import com.hs.hstesis.repo.domain.exceptions.CoordinatorNotAssignedToAnyAreaException;
-import com.hs.hstesis.repo.domain.exceptions.TopicDoesNotBelongToCourseException;
+import com.hs.hstesis.repo.domain.exceptions.*;
 import com.hs.hstesis.repo.domain.model.aggregates.Document;
 import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.services.DocumentCommandService;
+import com.hs.hstesis.repo.domain.services.FileStorageService;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class DocumentCommandServiceImpl implements DocumentCommandService {
     private final DocumentRepository documentRepository;
+    private final FileStorageService fileStorageService;
     private final ExternalIamService externalIamService;
     private final ExternalLearningService externalLearningService;
 
     public DocumentCommandServiceImpl(DocumentRepository documentRepository,
+                                      FileStorageService fileStorageService,
                                       ExternalIamService externalIamService,
                                       ExternalLearningService externalLearningService) {
         this.documentRepository = documentRepository;
+        this.fileStorageService = fileStorageService;
         this.externalIamService = externalIamService;
         this.externalLearningService = externalLearningService;
     }
 
+    @Transactional
     @Override
-    public Long handle(UploadDocumentCommand command) {
+    public Long handle(UploadDocumentCommand command, MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new UploadedFileIsEmptyException();
+        }
+
         Long userId = externalIamService.getAuthenticatedUserId();
 
         boolean isCoordinatorAssignedToAnyArea = externalLearningService.isCoordinatorAssignedToAnyArea(userId);
@@ -46,6 +56,16 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
             throw new TopicDoesNotBelongToCourseException(command.topicId(), command.courseId());
         }
 
+        String checksum = fileStorageService.calculateChecksum(file);
+
+        var existing = documentRepository.findByChecksum(checksum);
+        if (existing.isPresent()) {
+            throw new DocumentAlreadyExistsException(checksum);
+        }
+
+        String objectKey = fileStorageService.generateObjectKey(command.originalFileName(), command.topicId());
+        fileStorageService.upload(file, objectKey);
+
         var document = new Document(
                 command.title(),
                 userId,
@@ -53,8 +73,8 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
                 command.type(),
                 command.format(),
                 command.originalFileName(),
-                command.objectKey(),
-                command.fileChecksum()
+                objectKey,
+                checksum
         );
 
         document.addTargets(
@@ -62,8 +82,22 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
                 command.gradeLevels(),
                 command.courseId()
         );
-        documentRepository.save(document);
-        return document.getId();
+
+        try {
+            documentRepository.saveAndFlush(document);
+            return document.getId();
+
+        } catch (DataIntegrityViolationException e) {
+            try {
+                fileStorageService.delete(objectKey);
+            } catch (RuntimeException deleteEx) {
+                // Log the error but don't rethrow, since we want to return the existing document ID if possible
+            }
+
+            return documentRepository.findByChecksum(checksum)
+                    .map(Document::getId)
+                    .orElseThrow(() -> new DocumentDeduplicationStateException(checksum, e));
+        }
     }
 
 }

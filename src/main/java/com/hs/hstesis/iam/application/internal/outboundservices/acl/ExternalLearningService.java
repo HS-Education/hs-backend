@@ -3,7 +3,7 @@ package com.hs.hstesis.iam.application.internal.outboundservices.acl;
 import com.hs.hstesis.learning.interfaces.acl.LearningContextFacade;
 import org.springframework.stereotype.Service;
 
-@Service
+@Service("iamExternalLearningService")
 public class ExternalLearningService {
     private final LearningContextFacade learningContextFacade;
 

@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 
 public interface DocumentRepository extends JpaRepository<Document, Long> {
@@ -30,4 +31,21 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
        AND d.status = 'UPLOADED'
     """)
     List<Document> findAllByCourseId(Long courseId);
+
+    @Query("""
+        SELECT DISTINCT d
+        FROM Document d
+        LEFT JOIN FETCH d.targets t
+        WHERE d.id = :documentId
+          AND d.status = 'UPLOADED'
+    """)
+    Optional<Document> findByIdWithTargets(Long documentId);
+
+    @Query("""
+        SELECT d
+        FROM Document d
+        WHERE d.fileStorageInfo.fileChecksum = :checksum
+    """)
+    Optional<Document> findByChecksum(String checksum);
+
 }

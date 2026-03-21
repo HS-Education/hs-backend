@@ -20,7 +20,12 @@ import java.util.Set;
                 @Index(name = "idx_documents_topic", columnList = "topic_id"),
                 @Index(name = "idx_documents_author", columnList = "author_id"),
                 @Index(name = "idx_documents_status", columnList = "status")
-        })
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_document_checksum", columnNames = "file_checksum"),
+                @UniqueConstraint(name = "uk_document_object_key", columnNames = "object_key")
+        }
+)
 public class Document extends AuditableAbstractAggregateRoot<Document> {
 
     @Column(nullable = false, length = 200)
@@ -94,5 +99,4 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
     private void addTarget(EducationLevel level, GradeLevel grade, Long courseId) {
         targets.add(new DocumentTarget(this, level, grade, courseId));
     }
-
 }

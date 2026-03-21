@@ -13,8 +13,6 @@ public record UploadDocumentCommand(
         DocumentType type,
         DocumentFormat format,
         String originalFileName,
-        String objectKey,
-        String fileChecksum,
         EducationLevel educationLevel,
         List<GradeLevel> gradeLevels,
         Long courseId
@@ -34,12 +32,6 @@ public record UploadDocumentCommand(
         }
         if (originalFileName == null || originalFileName.isBlank()) {
             throw new IllegalArgumentException("Original file name cannot be null or blank");
-        }
-        if (objectKey == null || objectKey.isBlank()) {
-            throw new IllegalArgumentException("Object key cannot be null or blank");
-        }
-        if (fileChecksum == null || fileChecksum.isBlank()) {
-            throw new IllegalArgumentException("File checksum cannot be null or blank");
         }
         if (educationLevel == null) {
             throw new IllegalArgumentException("Education level cannot be null.");

@@ -3,10 +3,7 @@ package com.hs.hstesis.shared.interfaces.rest.advice;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.hs.hstesis.iam.domain.exceptions.*;
 import com.hs.hstesis.learning.domain.exceptions.*;
-import com.hs.hstesis.repo.domain.exceptions.CoordinatorDoesNotOwnCourseException;
-import com.hs.hstesis.repo.domain.exceptions.CoordinatorNotAssignedToAnyAreaException;
-import com.hs.hstesis.repo.domain.exceptions.DocumentWithoutTargetsException;
-import com.hs.hstesis.repo.domain.exceptions.TopicDoesNotBelongToCourseException;
+import com.hs.hstesis.repo.domain.exceptions.*;
 import com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException;
 import com.hs.hstesis.shared.interfaces.rest.resources.ApiErrorResponse;
 import org.slf4j.Logger;
@@ -29,7 +26,8 @@ public class GlobalExceptionHandler {
             GradingPeriodInPastException.class,
             InvalidGradingPeriodYearException.class,
             GradingPeriodDurationTooShortException.class,
-            InvalidRoleException.class
+            InvalidRoleException.class,
+            UploadedFileIsEmptyException.class
     })
     public ResponseEntity<ApiErrorResponse> handleBadRequest(RuntimeException ex) {
         logger.error("Bad Request: {}", ex.getMessage());
@@ -37,6 +35,48 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.value(),
                 HttpStatus.BAD_REQUEST.getReasonPhrase(),
                 ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    // --- BAD REQUEST (400) for specific parsing errors ---
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        logger.error("Validation Error: {}", ex.getMessage());
+        var errorResponse = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Invalid Argument",
+                ex.getMessage()
+        );
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    // --- BAD REQUEST (400) for parsing and payload format errors ---
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        logger.error("Not Readable: {}", ex.getMessage());
+        Throwable mostSpecificCause = ex.getMostSpecificCause();
+
+        if (mostSpecificCause instanceof IllegalArgumentException illegalArgumentEx) {
+            return handleIllegalArgument(illegalArgumentEx);
+        }
+
+        if (ex.getCause() instanceof InvalidFormatException invalidFormatException) {
+            String rejectedValue = invalidFormatException.getValue().toString();
+            Class<?> targetType = invalidFormatException.getTargetType();
+
+            var errorResponse = new ApiErrorResponse(
+                    HttpStatus.BAD_REQUEST.value(),
+                    "Type Mismatch",
+                    String.format("Invalid value '%s' for expected type '%s'", rejectedValue, targetType.getSimpleName())
+            );
+            return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+        }
+
+        var errorResponse = new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Malformed JSON",
+                "The request body contains invalid JSON syntax or structure."
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
@@ -111,7 +151,8 @@ public class GlobalExceptionHandler {
             CoordinatorNotAssignedToAnyAreaException.class,
             CoordinatorDoesNotOwnCourseException.class,
             TopicDoesNotBelongToCourseException.class,
-            DocumentWithoutTargetsException.class
+            DocumentWithoutTargetsException.class,
+            DocumentAlreadyExistsException.class,
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());
@@ -135,43 +176,30 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
-        logger.error("Validation Error: {}", ex.getMessage());
+    // --- INTERNAL SERVER ERROR (500) for document deduplication ---
+    @ExceptionHandler(DocumentDeduplicationStateException.class)
+    public ResponseEntity<ApiErrorResponse> handleDeduplicationState(DocumentDeduplicationStateException ex) {
+        logger.error("Deduplication state error", ex);
         var errorResponse = new ApiErrorResponse(
-                HttpStatus.BAD_REQUEST.value(),
-                "Invalid Argument",
-                ex.getMessage()
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
+                "A deduplication inconsistency occurred. Please try again or contact support if the issue persists."
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
-        logger.error("Not Readable: {}", ex.getMessage());
-        Throwable mostSpecificCause = ex.getMostSpecificCause();
-
-        if (mostSpecificCause instanceof IllegalArgumentException illegalArgumentEx) {
-            return handleIllegalArgument(illegalArgumentEx);
-        }
-
-        if (ex.getCause() instanceof InvalidFormatException invalidFormatException) {
-            String rejectedValue = invalidFormatException.getValue().toString();
-            Class<?> targetType = invalidFormatException.getTargetType();
-
-            var errorResponse = new ApiErrorResponse(
-                    HttpStatus.BAD_REQUEST.value(),
-                    "Type Mismatch",
-                    String.format("Invalid value '%s' for expected type '%s'", rejectedValue, targetType.getSimpleName())
-            );
-            return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
-        }
-
+    // --- SERVICE UNAVAILABLE (503) for file storage issues ---
+    @ExceptionHandler(FileStorageUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handleFileStorageUnavailable(FileStorageUnavailableException ex) {
+        logger.error("File storage unavailable: {}", ex.getMessage(), ex);
         var errorResponse = new ApiErrorResponse(
-                HttpStatus.BAD_REQUEST.value(),
-                "Malformed JSON",
-                "The request body contains invalid JSON syntax or structure."
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(),
+                "File storage is unavailable. Please try again or contact support."
         );
-        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header("Retry-After", "30")
+                .body(errorResponse);
     }
 }

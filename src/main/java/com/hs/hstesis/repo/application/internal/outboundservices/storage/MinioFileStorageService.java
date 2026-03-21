@@ -1,7 +1,9 @@
 package com.hs.hstesis.repo.application.internal.outboundservices.storage;
 
+import com.hs.hstesis.repo.domain.exceptions.FileStorageUnavailableException;
 import com.hs.hstesis.repo.domain.services.FileStorageService;
 import io.minio.*;
+import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +31,7 @@ public class MinioFileStorageService implements FileStorageService {
 
     @PostConstruct
     public void initBucket() {
+
         try {
             boolean found = minioClient.bucketExists(
                     BucketExistsArgs.builder()
@@ -45,7 +48,7 @@ public class MinioFileStorageService implements FileStorageService {
             }
 
         } catch (Exception e) {
-            throw new RuntimeException("Error initializing bucket", e);
+            throw new FileStorageUnavailableException("init bucket", e);
         }
     }
 
@@ -58,10 +61,6 @@ public class MinioFileStorageService implements FileStorageService {
     @Override
     public String calculateChecksum(MultipartFile file) {
 
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("File is empty");
-        }
-
         try (InputStream is = file.getInputStream()) {
 
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -70,16 +69,12 @@ public class MinioFileStorageService implements FileStorageService {
             return HexFormat.of().formatHex(hash);
 
         } catch (Exception e) {
-            throw new RuntimeException("Error calculating checksum", e);
+            throw new FileStorageUnavailableException("calculate checksum", e);
         }
     }
 
     @Override
     public void upload(MultipartFile file, String objectKey) {
-
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("File is empty");
-        }
 
         try (InputStream is = file.getInputStream()) {
 
@@ -93,12 +88,13 @@ public class MinioFileStorageService implements FileStorageService {
             );
 
         } catch (Exception e) {
-            throw new RuntimeException("Error uploading file to MinIO", e);
+            throw new FileStorageUnavailableException("upload", e);
         }
     }
 
     @Override
     public String generatePresignedUrl(String objectKey) {
+
         try {
             return minioClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
@@ -109,7 +105,28 @@ public class MinioFileStorageService implements FileStorageService {
                             .build()
             );
         } catch (Exception e) {
-            throw new RuntimeException("Error generating presigned URL", e);
+            throw new FileStorageUnavailableException("generate presigned url", e);
         }
     }
+
+    @Override
+    public void delete(String objectKey) {
+
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectKey)
+                            .build()
+            );
+        } catch (ErrorResponseException e) {
+            if ("NoSuchKey".equalsIgnoreCase(e.errorResponse().code())) {
+                return;
+            }
+            throw new FileStorageUnavailableException("delete object", e);
+        } catch (Exception e) {
+            throw new FileStorageUnavailableException("delete object", e);
+        }
+    }
+
 }

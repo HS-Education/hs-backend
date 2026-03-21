@@ -7,13 +7,16 @@ import com.hs.hstesis.repo.domain.exceptions.DocumentNotFoundException;
 import com.hs.hstesis.repo.domain.exceptions.DocumentWithoutTargetsException;
 import com.hs.hstesis.repo.domain.model.aggregates.Document;
 import com.hs.hstesis.repo.domain.model.queries.GetAccessibleDocumentsQuery;
+import com.hs.hstesis.repo.domain.model.queries.GetDocumentByIdQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentDownloadQuery;
 import com.hs.hstesis.repo.domain.services.DocumentQueryService;
 import com.hs.hstesis.repo.domain.services.FileStorageService;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class DocumentQueryServiceImpl implements DocumentQueryService {
@@ -30,6 +33,11 @@ public class DocumentQueryServiceImpl implements DocumentQueryService {
         this.fileStorageService = fileStorageService;
         this.externalLearningService = externalLearningService;
         this.externalIamService = externalIamService;
+    }
+
+    @Override
+    public Optional<Document> handle(GetDocumentByIdQuery query) {
+        return documentRepository.findById(query.documentId());
     }
 
     @Override
@@ -59,12 +67,13 @@ public class DocumentQueryServiceImpl implements DocumentQueryService {
         );
     }
 
+    @Transactional(readOnly = true)
     @Override
     public String handle(GetDocumentDownloadQuery query) {
 
         Long userId = externalIamService.getAuthenticatedUserId();
 
-        var document = documentRepository.findById(query.documentId())
+        var document = documentRepository.findByIdWithTargets(query.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(query.documentId()));
 
         Long courseId = query.courseId();

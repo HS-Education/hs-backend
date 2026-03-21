@@ -8,7 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Optional;
 
-@Service
+@Service("repoExternalLearningService")
 public class ExternalLearningService {
 
     private final LearningContextFacade learningContextFacade;
