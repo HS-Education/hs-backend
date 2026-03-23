@@ -64,7 +64,7 @@ public class SectionCommandServiceImpl implements SectionCommandService {
 
                 if (alreadyExists) {
                     throw new SectionNameAlreadyExistsInAcademicLevelException(
-                            TextUtils.toTitleCase(command.name()),
+                            command.name(),
                             section.getEducationLevel().name() + " " + section.getGradeLevel().name()
                     );
                 }

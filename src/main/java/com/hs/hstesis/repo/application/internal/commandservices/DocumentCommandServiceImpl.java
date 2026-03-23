@@ -4,6 +4,7 @@ import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalIam
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalLearningService;
 import com.hs.hstesis.repo.domain.exceptions.*;
 import com.hs.hstesis.repo.domain.model.aggregates.Document;
+import com.hs.hstesis.repo.domain.model.commands.DeleteDocumentCommand;
 import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.services.DocumentCommandService;
 import com.hs.hstesis.repo.domain.services.FileStorageService;
@@ -100,4 +101,39 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
         }
     }
 
+    @Transactional
+    @Override
+    public void handle(DeleteDocumentCommand command) {
+
+        var document = documentRepository.findById(command.documentId())
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+
+        Long courseId = command.courseId();
+
+        boolean belongsToCourse = document.getTargets().stream()
+                .anyMatch(t -> t.getId().getCourseId().equals(courseId));
+
+        if (!belongsToCourse) {
+            throw new CourseDocumentAccessDeniedException(courseId);
+        }
+
+        Long userId = externalIamService.getAuthenticatedUserId();
+
+        boolean isCoordinator = externalLearningService
+                .doesCoordinatorOwnCourse(userId, courseId);
+
+        if (!isCoordinator) {
+            throw new CourseDocumentAccessDeniedException(courseId);
+        }
+
+        String objectKey = document.getFileStorageInfo().getObjectKey();
+
+        try {
+            fileStorageService.delete(objectKey);
+        } catch (Exception e) {
+            throw new RuntimeException("Error deleting file from storage", e);
+        }
+
+        documentRepository.delete(document);
+    }
 }

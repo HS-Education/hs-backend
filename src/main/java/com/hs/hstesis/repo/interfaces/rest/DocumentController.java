@@ -1,5 +1,6 @@
 package com.hs.hstesis.repo.interfaces.rest;
 
+import com.hs.hstesis.repo.domain.model.commands.DeleteDocumentCommand;
 import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.model.queries.GetAccessibleDocumentsQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentByIdQuery;
@@ -12,6 +13,7 @@ import com.hs.hstesis.repo.interfaces.rest.resources.DocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.DownloadDocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.UploadDocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.transform.DocumentResourceFromEntityAssembler;
+import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
@@ -94,4 +96,12 @@ public class DocumentController {
         return ResponseEntity.ok(new DownloadDocumentResource(url));
     }
 
+    @PreAuthorize("hasRole('COORDINATOR')")
+    @Operation(description = "Deletes a document from the repository.")
+    @DeleteMapping("/{documentId}")
+    public ResponseEntity<MessageResource> deleteDocument(@PathVariable Long courseId, @PathVariable Long documentId) {
+        var deleteDocumentCommand = new DeleteDocumentCommand(courseId, documentId);
+        documentCommandService.handle(deleteDocumentCommand);
+        return ResponseEntity.ok(new MessageResource("Document deleted successfully"));
+    }
 }

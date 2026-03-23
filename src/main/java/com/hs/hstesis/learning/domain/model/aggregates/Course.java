@@ -1,11 +1,12 @@
 package com.hs.hstesis.learning.domain.model.aggregates;
 
 import com.hs.hstesis.learning.domain.exceptions.TopicNotFoundException;
-import com.hs.hstesis.learning.domain.model.commands.AddTopicCommand;
 import com.hs.hstesis.learning.domain.model.commands.CreateCourseCommand;
 import com.hs.hstesis.learning.domain.model.commands.UpdateCourseCommand;
 import com.hs.hstesis.learning.domain.model.entities.Area;
 import com.hs.hstesis.learning.domain.model.entities.Topic;
+import com.hs.hstesis.repo.domain.exceptions.TopicAlreadyExistsException;
+import com.hs.hstesis.shared.domain.model.util.TextUtils;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -54,8 +55,17 @@ public class Course {
     }
 
     public void addTopic(String name) {
+        String normalizedName = TextUtils.normalize(name);
+
+        boolean exists = topics.stream()
+                .anyMatch(t -> TextUtils.normalize(t.getName()).equals(normalizedName));
+
+        if (exists) {
+            throw new TopicAlreadyExistsException(name);
+        }
+
         int nextIndex = topics.size() + 1;
-        Topic topic = new Topic(this, name.trim(), nextIndex);
+        Topic topic = new Topic(this, name.toUpperCase().trim(), nextIndex);
         topics.add(topic);
     }
 

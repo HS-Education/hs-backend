@@ -8,7 +8,6 @@ import com.hs.hstesis.learning.domain.services.EnrollmentQueryService;
 import com.hs.hstesis.learning.interfaces.acl.dto.UserEnrollmentData;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -46,6 +45,11 @@ public class LearningContextFacade {
     public boolean doesCoordinatorOwnCourse(Long coordinatorId, Long courseId) {
         if (coordinatorId == null || courseId == null) return false;
         return courseQueryService.handle(new ExistsCourseForCoordinatorQuery(courseId, coordinatorId));
+    }
+
+    public boolean existsCourse(Long courseId) {
+        if (courseId == null) return false;
+        return courseQueryService.handle(new GetCourseByIdQuery(courseId)).isPresent();
     }
 
     public Optional<UserEnrollmentData> getUserEnrollmentDataByCourse(Long userId, Long courseId) {

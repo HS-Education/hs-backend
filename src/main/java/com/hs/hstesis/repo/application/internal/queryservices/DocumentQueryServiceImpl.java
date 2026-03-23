@@ -2,9 +2,8 @@ package com.hs.hstesis.repo.application.internal.queryservices;
 
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalIamService;
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalLearningService;
-import com.hs.hstesis.repo.domain.exceptions.CourseDocumentAccessDeniedException;
+import com.hs.hstesis.repo.domain.exceptions.CourseNotFoundException;
 import com.hs.hstesis.repo.domain.exceptions.DocumentNotFoundException;
-import com.hs.hstesis.repo.domain.exceptions.DocumentWithoutTargetsException;
 import com.hs.hstesis.repo.domain.model.aggregates.Document;
 import com.hs.hstesis.repo.domain.model.queries.GetAccessibleDocumentsQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentByIdQuery;
@@ -46,6 +45,7 @@ public class DocumentQueryServiceImpl implements DocumentQueryService {
         Long userId = externalIamService.getAuthenticatedUserId();
         Long courseId = query.courseId();
 
+        boolean courseExists = externalLearningService.existsCourse(courseId);
         boolean isCoordinatorOfCourse = externalLearningService.doesCoordinatorOwnCourse(userId, courseId);
 
         if (isCoordinatorOfCourse) {
@@ -54,8 +54,8 @@ public class DocumentQueryServiceImpl implements DocumentQueryService {
 
         var contextOpt = externalLearningService.getUserEnrollmentContextByCourse(userId, courseId);
 
-        if (contextOpt.isEmpty()) {
-            throw new CourseDocumentAccessDeniedException(courseId);
+        if (!courseExists || (!isCoordinatorOfCourse && contextOpt.isEmpty())) {
+            throw new CourseNotFoundException(courseId);
         }
 
         var context = contextOpt.get();
@@ -71,10 +71,10 @@ public class DocumentQueryServiceImpl implements DocumentQueryService {
     @Override
     public String handle(GetDocumentDownloadQuery query) {
 
-        Long userId = externalIamService.getAuthenticatedUserId();
+        Long documentId = query.documentId();
 
-        var document = documentRepository.findByIdWithTargets(query.documentId())
-                .orElseThrow(() -> new DocumentNotFoundException(query.documentId()));
+        var document = documentRepository.findByIdWithTargets(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
 
         Long courseId = query.courseId();
 
@@ -82,18 +82,18 @@ public class DocumentQueryServiceImpl implements DocumentQueryService {
                 .anyMatch(t -> t.getId().getCourseId().equals(courseId));
 
         if (!belongsToCourse) {
-            throw new CourseDocumentAccessDeniedException(courseId);
+            throw new DocumentNotFoundException(documentId);
         }
 
-        boolean isCoordinator = externalLearningService
-                .doesCoordinatorOwnCourse(userId, courseId);
+        Long userId = externalIamService.getAuthenticatedUserId();
+
+        boolean isCoordinator = externalLearningService.doesCoordinatorOwnCourse(userId, courseId);
 
         if (!isCoordinator) {
-            var contextOpt = externalLearningService
-                    .getUserEnrollmentContextByCourse(userId, courseId);
+            var contextOpt = externalLearningService.getUserEnrollmentContextByCourse(userId, courseId);
 
             if (contextOpt.isEmpty()) {
-                throw new CourseDocumentAccessDeniedException(courseId);
+                throw new DocumentNotFoundException(documentId);
             }
 
             var context = contextOpt.get();
@@ -105,7 +105,7 @@ public class DocumentQueryServiceImpl implements DocumentQueryService {
             );
 
             if (!hasAccess) {
-                throw new CourseDocumentAccessDeniedException(courseId);
+                throw new DocumentNotFoundException(documentId);
             }
         }
 

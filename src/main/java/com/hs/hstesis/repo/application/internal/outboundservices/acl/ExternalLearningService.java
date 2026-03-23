@@ -29,6 +29,10 @@ public class ExternalLearningService {
         return learningContextFacade.doesCoordinatorOwnCourse(coordinatorId, courseId);
     }
 
+    public boolean existsCourse(Long courseId) {
+        return learningContextFacade.existsCourse(courseId);
+    }
+
     public Optional<UserEnrollmentContext> getUserEnrollmentContextByCourse(Long userId, Long courseId) {
         return learningContextFacade
                 .getUserEnrollmentDataByCourse(userId, courseId)

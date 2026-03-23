@@ -153,6 +153,7 @@ public class GlobalExceptionHandler {
             TopicDoesNotBelongToCourseException.class,
             DocumentWithoutTargetsException.class,
             DocumentAlreadyExistsException.class,
+            TopicAlreadyExistsException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());
