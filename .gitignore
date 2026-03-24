@@ -39,3 +39,6 @@ target/
 ### Docker ###
 docker-compose.yml
 compose.yaml
+
+### AI Worker ###
+ai-worker/
