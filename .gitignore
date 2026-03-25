@@ -41,4 +41,8 @@ docker-compose.yml
 compose.yaml
 
 ### AI Worker ###
-ai-worker/
+ai-worker/*
+!ai-worker/main.py
+
+### Database ###
+db

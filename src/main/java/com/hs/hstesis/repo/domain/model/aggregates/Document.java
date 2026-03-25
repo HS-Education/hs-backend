@@ -3,6 +3,7 @@ package com.hs.hstesis.repo.domain.model.aggregates;
 import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.model.entities.DocumentChunk;
 import com.hs.hstesis.repo.domain.model.entities.DocumentTarget;
+import com.hs.hstesis.repo.domain.model.events.DocumentUploadedEvent;
 import com.hs.hstesis.repo.domain.model.valueobjects.*;
 import com.hs.hstesis.shared.domain.model.aggregates.AuditableAbstractAggregateRoot;
 import jakarta.persistence.*;
@@ -92,11 +93,11 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
 
     public void addTargets(EducationLevel level, List<GradeLevel> grades, Long courseId) {
         for (GradeLevel grade : grades) {
-            addTarget(level, grade, courseId);
+            targets.add(new DocumentTarget(this, level, grade, courseId));
         }
     }
 
-    private void addTarget(EducationLevel level, GradeLevel grade, Long courseId) {
-        targets.add(new DocumentTarget(this, level, grade, courseId));
+    public void confirmUpload() {
+        this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey()));
     }
 }

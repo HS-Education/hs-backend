@@ -86,6 +86,8 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
 
         try {
             documentRepository.saveAndFlush(document);
+            document.confirmUpload();
+            documentRepository.save(document);
             return document.getId();
 
         } catch (DataIntegrityViolationException e) {
