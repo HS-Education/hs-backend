@@ -165,6 +165,10 @@
             <version>5.29.0</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-vector</artifactId>
+        </dependency>
     </dependencies>
     <dependencyManagement>
         <dependencies>

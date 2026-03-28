@@ -38,9 +38,6 @@ public class DocumentChunk {
     @Column(columnDefinition = "vector(768)")
     private float[] embedding;
 
-    @Column(name = "content_tsv", insertable = false, updatable = false)
-    private String contentTsv;
-
     protected DocumentChunk() {}
 
     public DocumentChunk(Document document,

@@ -153,7 +153,9 @@ public class GlobalExceptionHandler {
             TopicDoesNotBelongToCourseException.class,
             DocumentWithoutTargetsException.class,
             DocumentAlreadyExistsException.class,
-            TopicAlreadyExistsException.class
+            TopicAlreadyExistsException.class,
+            InvalidDocumentStatusTransitionException.class,
+            DocumentChunksRequiredException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());
@@ -201,6 +203,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
                 .header("Retry-After", "30")
+                .body(errorResponse);
+    }
+
+    // --- SERVICE UNAVAILABLE (503) for message broker ---
+    @ExceptionHandler(MessageBrokerUnavailableException.class)
+    public ResponseEntity<ApiErrorResponse> handleMessageBrokerUnavailable(MessageBrokerUnavailableException ex) {
+        logger.error("Message broker unavailable. operation={}", ex.getMessage(), ex);
+
+        var errorResponse = new ApiErrorResponse(
+                HttpStatus.SERVICE_UNAVAILABLE.value(),
+                HttpStatus.SERVICE_UNAVAILABLE.getReasonPhrase(),
+                "Message broker is unavailable. Please try again shortly."
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .header("Retry-After", "15")
                 .body(errorResponse);
     }
 }

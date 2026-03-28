@@ -1,14 +1,14 @@
-package com.hs.hstesis.repo.application.internal.outboundservices.storage;
+package com.hs.hstesis.repo.infrastructure.storage.minio;
 
+import com.hs.hstesis.repo.application.internal.outboundservices.storage.UploadFile;
 import com.hs.hstesis.repo.domain.exceptions.FileStorageUnavailableException;
-import com.hs.hstesis.repo.domain.services.FileStorageService;
+import com.hs.hstesis.repo.application.internal.outboundservices.storage.FileStorageService;
 import io.minio.*;
 import io.minio.errors.ErrorResponseException;
 import io.minio.http.Method;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -16,12 +16,12 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
-public class MinioFileStorageService implements FileStorageService {
+public class FileStorageMinioAdapter implements FileStorageService {
 
     private final MinioClient minioClient;
     private final String bucketName;
 
-    public MinioFileStorageService(
+    public FileStorageMinioAdapter(
             MinioClient minioClient,
             @Value("${minio.bucket}") String bucketName
     ) {
@@ -59,9 +59,9 @@ public class MinioFileStorageService implements FileStorageService {
     }
 
     @Override
-    public String calculateChecksum(MultipartFile file) {
+    public String calculateChecksum(UploadFile file) {
 
-        try (InputStream is = file.getInputStream()) {
+        try (InputStream is = file.openStream()) {
 
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(is.readAllBytes());
@@ -74,16 +74,16 @@ public class MinioFileStorageService implements FileStorageService {
     }
 
     @Override
-    public void upload(MultipartFile file, String objectKey) {
+    public void upload(UploadFile file, String objectKey) {
 
-        try (InputStream is = file.getInputStream()) {
+        try (InputStream is = file.openStream()) {
 
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(bucketName)
                             .object(objectKey)
-                            .stream(is, file.getSize(), -1)
-                            .contentType(file.getContentType())
+                            .stream(is, file.size(), -1)
+                            .contentType(file.contentType())
                             .build()
             );
 

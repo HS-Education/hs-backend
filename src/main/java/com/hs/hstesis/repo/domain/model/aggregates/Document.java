@@ -1,6 +1,7 @@
 package com.hs.hstesis.repo.domain.model.aggregates;
 
-import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
+import com.hs.hstesis.repo.domain.exceptions.DocumentChunksRequiredException;
+import com.hs.hstesis.repo.domain.exceptions.InvalidDocumentStatusTransitionException;
 import com.hs.hstesis.repo.domain.model.entities.DocumentChunk;
 import com.hs.hstesis.repo.domain.model.entities.DocumentTarget;
 import com.hs.hstesis.repo.domain.model.events.DocumentUploadedEvent;
@@ -82,19 +83,48 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
         );
     }
 
-    public void addChunk(String content, int pageNumber, int chunkIndex, float[] embedding) {
-        DocumentChunk chunk = new DocumentChunk(this, content, pageNumber, chunkIndex, embedding);
-        chunks.add(chunk);
-    }
+    private static final int EMBEDDING_DIMENSION = 768;
 
-    public void removeChunk(DocumentChunk chunk) {
-        chunks.remove(chunk);
+    public void replaceChunks (List<ChunkEmbeddingData> chunkData) {
+        if (chunkData == null || chunkData.isEmpty()) {
+            throw new DocumentChunksRequiredException(this.getId());
+        }
+
+        this.chunks.clear();
+
+        for (var c : chunkData) {
+            var chunk = new DocumentChunk(
+                    this,
+                    c.content(),
+                    c.pageNumber(),
+                    c.chunkIndex(),
+                    c.embedding()
+            );
+            this.chunks.add(chunk);
+        }
     }
 
     public void addTargets(EducationLevel level, List<GradeLevel> grades, Long courseId) {
         for (GradeLevel grade : grades) {
             targets.add(new DocumentTarget(this, level, grade, courseId));
         }
+    }
+
+    public void markAsProcessing() {
+        if (this.status != DocumentStatus.UPLOADED) {
+            throw new InvalidDocumentStatusTransitionException(this.status, DocumentStatus.PROCESSING);
+        }
+        this.status = DocumentStatus.PROCESSING;
+    }
+
+    public void markAsReady() {
+        if (this.status != DocumentStatus.PROCESSING) {
+            throw new InvalidDocumentStatusTransitionException(this.status, DocumentStatus.READY);
+        }
+        if (this.chunks == null || this.chunks.isEmpty()) {
+            throw new DocumentChunksRequiredException(this.getId());
+        }
+        this.status = DocumentStatus.READY;
     }
 
     public void confirmUpload() {

@@ -9,7 +9,7 @@ import com.hs.hstesis.repo.domain.model.queries.GetAccessibleDocumentsQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentByIdQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentDownloadQuery;
 import com.hs.hstesis.repo.domain.services.DocumentQueryService;
-import com.hs.hstesis.repo.domain.services.FileStorageService;
+import com.hs.hstesis.repo.application.internal.outboundservices.storage.FileStorageService;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

@@ -9,6 +9,7 @@ import com.hs.hstesis.repo.domain.model.valueobjects.DocumentFormat;
 import com.hs.hstesis.repo.domain.model.valueobjects.DocumentType;
 import com.hs.hstesis.repo.domain.services.DocumentCommandService;
 import com.hs.hstesis.repo.domain.services.DocumentQueryService;
+import com.hs.hstesis.repo.interfaces.rest.adapters.UploadFileFromMultipartAdapter;
 import com.hs.hstesis.repo.interfaces.rest.resources.DocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.DownloadDocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.UploadDocumentResource;
@@ -57,7 +58,9 @@ public class DocumentController {
                 courseId
         );
 
-        var documentId = documentCommandService.handle(uploadDocumentCommand, file);
+        var uploadFile = new UploadFileFromMultipartAdapter(file);
+
+        var documentId = documentCommandService.handle(uploadDocumentCommand, uploadFile);
 
         var getDocumentByIdQuery = new GetDocumentByIdQuery(documentId);
         var document = documentQueryService.handle(getDocumentByIdQuery);

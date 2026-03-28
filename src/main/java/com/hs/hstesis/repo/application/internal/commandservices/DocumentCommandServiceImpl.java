@@ -2,17 +2,18 @@ package com.hs.hstesis.repo.application.internal.commandservices;
 
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalIamService;
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalLearningService;
+import com.hs.hstesis.repo.application.internal.outboundservices.storage.UploadFile;
 import com.hs.hstesis.repo.domain.exceptions.*;
 import com.hs.hstesis.repo.domain.model.aggregates.Document;
 import com.hs.hstesis.repo.domain.model.commands.DeleteDocumentCommand;
+import com.hs.hstesis.repo.domain.model.commands.SaveDocumentEmbeddingsCommand;
 import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.services.DocumentCommandService;
-import com.hs.hstesis.repo.domain.services.FileStorageService;
+import com.hs.hstesis.repo.application.internal.outboundservices.storage.FileStorageService;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class DocumentCommandServiceImpl implements DocumentCommandService {
@@ -33,8 +34,8 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
 
     @Transactional
     @Override
-    public Long handle(UploadDocumentCommand command, MultipartFile file) {
-        if (file.isEmpty()) {
+    public Long handle(UploadDocumentCommand command, UploadFile file) {
+        if (file.size() <= 0) {
             throw new UploadedFileIsEmptyException();
         }
 
@@ -137,5 +138,17 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
         }
 
         documentRepository.delete(document);
+    }
+
+    @Transactional
+    @Override
+    public void handle(SaveDocumentEmbeddingsCommand command) {
+        var document = documentRepository.findById(command.documentId())
+                .orElseThrow(() -> new DocumentNotFoundException(command.documentId()));
+
+        document.replaceChunks(command.chunks());
+        document.markAsReady();
+
+        documentRepository.save(document);
     }
 }
