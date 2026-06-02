@@ -21,7 +21,6 @@ public class GlobalExceptionHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // --- BAD REQUEST (400) ---
     @ExceptionHandler({
             GradingPeriodInPastException.class,
             InvalidGradingPeriodYearException.class,
@@ -39,7 +38,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
-    // --- BAD REQUEST (400) for specific parsing errors ---
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
         logger.error("Validation Error: {}", ex.getMessage());
@@ -51,7 +49,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
-    // --- BAD REQUEST (400) for parsing and payload format errors ---
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
         logger.error("Not Readable: {}", ex.getMessage());
@@ -81,7 +78,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
-    // --- UNAUTHORIZED (401) ---
     @ExceptionHandler(AuthenticationException.class)
     public ResponseEntity<ApiErrorResponse> handleAuthenticationException(AuthenticationException ex) {
         logger.error("Unauthorized: {}", ex.getMessage());
@@ -93,7 +89,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
     }
 
-    // --- FORBIDDEN (403) ---
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
         logger.error("Forbidden: {}", ex.getMessage());
@@ -105,7 +100,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }
 
-    // --- NOT FOUND (404) ---
     @ExceptionHandler({
             ResourceNotFoundException.class
     })
@@ -119,7 +113,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.NOT_FOUND);
     }
 
-    // --- CONFLICT (409) ---
     @ExceptionHandler({
             AreaRelatedToCoursesException.class,
             AcademicYearAlreadyExistsException.class,
@@ -167,7 +160,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 
-    // --- INTERNAL SERVER ERROR (500) ---
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleInternalError(Exception ex) {
         logger.error("Internal Server Error: ", ex);
@@ -179,7 +171,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    // --- INTERNAL SERVER ERROR (500) for document deduplication ---
     @ExceptionHandler(DocumentDeduplicationStateException.class)
     public ResponseEntity<ApiErrorResponse> handleDeduplicationState(DocumentDeduplicationStateException ex) {
         logger.error("Deduplication state error", ex);
@@ -191,7 +182,6 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    // --- SERVICE UNAVAILABLE (503) for file storage issues ---
     @ExceptionHandler(FileStorageUnavailableException.class)
     public ResponseEntity<ApiErrorResponse> handleFileStorageUnavailable(FileStorageUnavailableException ex) {
         logger.error("File storage unavailable: {}", ex.getMessage(), ex);
@@ -206,7 +196,6 @@ public class GlobalExceptionHandler {
                 .body(errorResponse);
     }
 
-    // --- SERVICE UNAVAILABLE (503) for message broker ---
     @ExceptionHandler(MessageBrokerUnavailableException.class)
     public ResponseEntity<ApiErrorResponse> handleMessageBrokerUnavailable(MessageBrokerUnavailableException ex) {
         logger.error("Message broker unavailable. operation={}", ex.getMessage(), ex);

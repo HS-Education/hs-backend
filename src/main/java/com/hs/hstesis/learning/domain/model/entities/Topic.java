@@ -1,6 +1,7 @@
 package com.hs.hstesis.learning.domain.model.entities;
 
 import com.hs.hstesis.learning.domain.model.aggregates.Course;
+import com.hs.hstesis.learning.domain.model.aggregates.GradingPeriod;
 import jakarta.persistence.*;
 import lombok.Getter;
 
@@ -8,7 +9,7 @@ import lombok.Getter;
 @Getter
 @Table(name = "topics",
         indexes = {
-                @Index(name = "idx_topics_course_order", columnList = "course_id, order_index")
+                @Index(name = "idx_topics_course_order", columnList = "course_id, grading_period_id, order_index")
         })
 public class Topic {
 
@@ -26,15 +27,24 @@ public class Topic {
     @JoinColumn(name = "course_id", nullable = false)
     private Course course;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grading_period_id", nullable = false)
+    private GradingPeriod gradingPeriod;
+
     protected Topic() {}
 
-    public Topic(Course course, String name, Integer orderIndex) {
+    public Topic(Course course, GradingPeriod gradingPeriod, String name, Integer orderIndex) {
         this.course = course;
+        this.gradingPeriod = gradingPeriod;
         this.name = name;
         this.orderIndex = orderIndex;
     }
 
     public void updateOrderIndex(Integer orderIndex) {
         this.orderIndex = orderIndex;
+    }
+
+    public void updateGradingPeriod(GradingPeriod gradingPeriod) {
+        this.gradingPeriod = gradingPeriod;
     }
 }

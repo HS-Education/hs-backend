@@ -10,4 +10,5 @@ public interface ClassroomQueryService {
     Optional<Classroom> handle(GetClassroomByIdQuery query);
     List<Classroom> handle(GetClassroomsByUserIdQuery query);
     List<Classroom> handle(GetAllClassroomsQuery query);
+    List<Classroom> handle(GetClassroomsByCourseIdQuery query);
 }

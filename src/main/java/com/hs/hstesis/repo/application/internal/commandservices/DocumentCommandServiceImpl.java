@@ -95,7 +95,6 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
             try {
                 fileStorageService.delete(objectKey);
             } catch (RuntimeException deleteEx) {
-                // Log the error but don't rethrow, since we want to return the existing document ID if possible
             }
 
             return documentRepository.findByChecksum(checksum)
@@ -150,5 +149,48 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
         document.markAsReady();
 
         documentRepository.save(document);
+    }
+
+    @Transactional
+    @Override
+    public java.util.List<Long> handle(com.hs.hstesis.repo.domain.model.commands.UploadBulkDocumentsCommand command, java.util.List<UploadFile> uploadFiles) {
+        if (command.documentsMetadata().size() != uploadFiles.size()) {
+            throw new IllegalArgumentException("Number of files must match number of metadata entries.");
+        }
+
+        var gradingPeriod = externalLearningService.getGradingPeriodByCourseAndBimester(command.courseId(), command.bimester())
+                .orElseThrow(() -> new IllegalArgumentException("Grading period not found for the given bimester and course."));
+
+        long numberOfWeeks = java.time.temporal.ChronoUnit.WEEKS.between(gradingPeriod.startDate(), gradingPeriod.endDate());
+        if (numberOfWeeks <= 0) {
+            numberOfWeeks = 1;
+        }
+
+        if (uploadFiles.size() > numberOfWeeks) {
+            throw new IllegalArgumentException("Number of uploaded files (" + uploadFiles.size() + ") exceeds the number of weeks in the bimester (" + numberOfWeeks + ").");
+        }
+
+        java.util.List<Long> documentIds = new java.util.ArrayList<>();
+
+        for (int i = 0; i < uploadFiles.size(); i++) {
+            var metadata = command.documentsMetadata().get(i);
+            var file = uploadFiles.get(i);
+            
+            var uploadDocCommand = new UploadDocumentCommand(
+                    metadata.title(),
+                    metadata.topicId(),
+                    com.hs.hstesis.repo.domain.model.valueobjects.DocumentType.ACADEMIC,
+                    com.hs.hstesis.repo.domain.model.valueobjects.DocumentFormat.fromFileName(metadata.fileName()),
+                    metadata.fileName(),
+                    com.hs.hstesis.repo.domain.model.valueobjects.EducationLevel.valueOf(metadata.educationLevel()),
+                    metadata.gradeLevels().stream().map(com.hs.hstesis.repo.domain.model.valueobjects.GradeLevel::valueOf).toList(),
+                    command.courseId()
+            );
+
+            Long documentId = this.handle(uploadDocCommand, file);
+            documentIds.add(documentId);
+        }
+
+        return documentIds;
     }
 }

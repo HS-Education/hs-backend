@@ -5,6 +5,6 @@ import com.hs.hstesis.learning.interfaces.rest.resources.ReorderTopicsResource;
 
 public class ReorderTopicsCommandFromResourceAssembler {
     public static ReorderTopicsCommand toCommandFromResource(Long courseId, ReorderTopicsResource resource) {
-        return new ReorderTopicsCommand(courseId, resource.topicIdsInOrder());
+        return new ReorderTopicsCommand(courseId, resource.topics());
     }
 }

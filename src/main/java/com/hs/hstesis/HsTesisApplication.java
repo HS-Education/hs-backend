@@ -6,7 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication(exclude = {
         org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration.class
-})public class HsTesisApplication {
+})
+public class HsTesisApplication {
 
     public static void main(String[] args) {
         Dotenv dotenv = Dotenv.load();

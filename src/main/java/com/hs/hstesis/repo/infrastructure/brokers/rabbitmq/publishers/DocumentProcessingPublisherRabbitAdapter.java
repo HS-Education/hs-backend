@@ -60,4 +60,3 @@ public class DocumentProcessingPublisherRabbitAdapter implements DocumentProcess
         }
     }
 }
-

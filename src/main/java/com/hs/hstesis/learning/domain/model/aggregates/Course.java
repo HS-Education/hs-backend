@@ -54,18 +54,21 @@ public class Course {
         this.name = name;
     }
 
-    public void addTopic(String name) {
+    public void addTopic(String name, com.hs.hstesis.learning.domain.model.aggregates.GradingPeriod gradingPeriod) {
         String normalizedName = TextUtils.normalize(name);
 
         boolean exists = topics.stream()
+                .filter(t -> t.getGradingPeriod().getId().equals(gradingPeriod.getId()))
                 .anyMatch(t -> TextUtils.normalize(t.getName()).equals(normalizedName));
 
         if (exists) {
             throw new TopicAlreadyExistsException(name);
         }
 
-        int nextIndex = topics.size() + 1;
-        Topic topic = new Topic(this, name.toUpperCase().trim(), nextIndex);
+        int nextIndex = (int) topics.stream()
+                .filter(t -> t.getGradingPeriod().getId().equals(gradingPeriod.getId()))
+                .count() + 1;
+        Topic topic = new Topic(this, gradingPeriod, name.toUpperCase().trim(), nextIndex);
         topics.add(topic);
     }
 
@@ -78,19 +81,24 @@ public class Course {
         topics.remove(topic);
     }
 
-    public void reorderTopics(List<Long> topicIdsInOrder) {
+    public void reorderTopics(List<com.hs.hstesis.learning.domain.model.commands.TopicOrderDto> topicsOrder, com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.GradingPeriodRepository gradingPeriodRepository) {
         Map<Long, Topic> topicMap = topics.stream()
                 .collect(Collectors.toMap(Topic::getId, t -> t));
 
-        for (int i = 0; i < topicIdsInOrder.size(); i++) {
-            Long topicId = topicIdsInOrder.get(i);
-            Topic topic = topicMap.get(topicId);
+        for (var orderDto : topicsOrder) {
+            Topic topic = topicMap.get(orderDto.topicId());
 
             if (topic == null) {
-                throw new TopicNotFoundException(topicId);
+                throw new TopicNotFoundException(orderDto.topicId());
             }
 
-            topic.updateOrderIndex(i + 1);
+            if (!topic.getGradingPeriod().getId().equals(orderDto.gradingPeriodId())) {
+                var newGradingPeriod = gradingPeriodRepository.findById(orderDto.gradingPeriodId())
+                        .orElseThrow(() -> new IllegalArgumentException("Grading Period not found"));
+                topic.updateGradingPeriod(newGradingPeriod);
+            }
+
+            topic.updateOrderIndex(orderDto.orderIndex());
         }
     }
 }

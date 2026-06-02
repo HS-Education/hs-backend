@@ -1,18 +1,14 @@
 package com.hs.hstesis.repo.interfaces.rest;
 
 import com.hs.hstesis.repo.domain.model.commands.DeleteDocumentCommand;
-import com.hs.hstesis.repo.domain.model.commands.UploadDocumentCommand;
 import com.hs.hstesis.repo.domain.model.queries.GetAccessibleDocumentsQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentByIdQuery;
 import com.hs.hstesis.repo.domain.model.queries.GetDocumentDownloadQuery;
-import com.hs.hstesis.repo.domain.model.valueobjects.DocumentFormat;
-import com.hs.hstesis.repo.domain.model.valueobjects.DocumentType;
 import com.hs.hstesis.repo.domain.services.DocumentCommandService;
 import com.hs.hstesis.repo.domain.services.DocumentQueryService;
 import com.hs.hstesis.repo.interfaces.rest.adapters.UploadFileFromMultipartAdapter;
 import com.hs.hstesis.repo.interfaces.rest.resources.DocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.DownloadDocumentResource;
-import com.hs.hstesis.repo.interfaces.rest.resources.UploadDocumentResource;
 import com.hs.hstesis.repo.interfaces.rest.transform.DocumentResourceFromEntityAssembler;
 import com.hs.hstesis.shared.interfaces.rest.resources.MessageResource;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,37 +36,41 @@ public class DocumentController {
     }
 
     @PreAuthorize("hasRole('COORDINATOR')")
-    @Operation(description = "Uploads a new document to the repository.")
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<DocumentResource> uploadDocument(
+    @Operation(description = "Uploads multiple documents to the repository for a given bimester.")
+    @PostMapping(value = "/bulk", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<List<DocumentResource>> uploadBulkDocuments(
             @PathVariable Long courseId,
-            @RequestPart("file") MultipartFile file,
-            @RequestPart("data") UploadDocumentResource resource) {
+            @RequestPart("files") List<MultipartFile> files,
+            @RequestPart("data") String dataJson) {
 
-        var uploadDocumentCommand = new UploadDocumentCommand(
-                resource.title(),
-                resource.topicId(),
-                DocumentType.ACADEMIC,
-                DocumentFormat.fromFileName(file.getOriginalFilename()),
-                file.getOriginalFilename(),
-                resource.educationLevel(),
-                resource.gradeLevels(),
+        com.hs.hstesis.repo.interfaces.rest.resources.UploadBulkDocumentsResource resource;
+        try {
+            var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            resource = mapper.readValue(dataJson, com.hs.hstesis.repo.interfaces.rest.resources.UploadBulkDocumentsResource.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid JSON format in 'data' field: " + e.getMessage());
+        }
+
+        var uploadBulkCommand = new com.hs.hstesis.repo.domain.model.commands.UploadBulkDocumentsCommand(
+                resource.bimester(),
+                resource.documents(),
                 courseId
         );
 
-        var uploadFile = new UploadFileFromMultipartAdapter(file);
+        List<com.hs.hstesis.repo.application.internal.outboundservices.storage.UploadFile> uploadFiles = files.stream()
+                .map(f -> (com.hs.hstesis.repo.application.internal.outboundservices.storage.UploadFile) new UploadFileFromMultipartAdapter(f))
+                .toList();
 
-        var documentId = documentCommandService.handle(uploadDocumentCommand, uploadFile);
+        var documentIds = documentCommandService.handle(uploadBulkCommand, uploadFiles);
 
-        var getDocumentByIdQuery = new GetDocumentByIdQuery(documentId);
-        var document = documentQueryService.handle(getDocumentByIdQuery);
+        List<DocumentResource> documentResources = documentIds.stream()
+                .map(id -> documentQueryService.handle(new GetDocumentByIdQuery(id)))
+                .filter(java.util.Optional::isPresent)
+                .map(java.util.Optional::get)
+                .map(DocumentResourceFromEntityAssembler::toResourceFromEntity)
+                .toList();
 
-        if (document.isEmpty()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        var documentResource = DocumentResourceFromEntityAssembler.toResourceFromEntity(document.get());
-        return new ResponseEntity<>(documentResource, HttpStatus.CREATED);
+        return new ResponseEntity<>(documentResources, HttpStatus.CREATED);
     }
 
     @PreAuthorize("hasAuthority('REPOSITORY_READ')")

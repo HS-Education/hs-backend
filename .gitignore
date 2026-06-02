@@ -40,9 +40,9 @@ target/
 docker-compose.yml
 compose.yaml
 
-### AI Worker ###
-ai-worker/*
-!ai-worker/main.py
+### AI Service ###
+ai-service/*
+!ai-service/main.py
 
 ### Database ###
 db

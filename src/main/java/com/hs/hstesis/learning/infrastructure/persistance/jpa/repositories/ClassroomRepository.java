@@ -14,4 +14,5 @@ public interface ClassroomRepository extends JpaRepository<Classroom, Long> {
             GradeLevel gradeLevel,
             Long academicYearId
     );
+    List<Classroom> findAllByCourseId(Long courseId);
 }

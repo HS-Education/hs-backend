@@ -39,4 +39,9 @@ public class ClassroomQueryServiceImpl implements ClassroomQueryService {
     public List<Classroom> handle(GetAllClassroomsQuery query) {
         return classroomRepository.findAll();
     }
+
+    @Override
+    public List<Classroom> handle(GetClassroomsByCourseIdQuery query) {
+        return classroomRepository.findAllByCourseId(query.courseId());
+    }
 }

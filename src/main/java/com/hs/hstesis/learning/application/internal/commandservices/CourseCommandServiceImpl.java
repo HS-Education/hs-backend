@@ -19,13 +19,16 @@ import java.util.Optional;
 public class CourseCommandServiceImpl implements CourseCommandService {
     private final CourseRepository courseRepository;
     private final AreaRepository areaRepository;
+    private final com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.GradingPeriodRepository gradingPeriodRepository;
     private final AcademicYearStateValidator yearValidator;
 
     public CourseCommandServiceImpl(CourseRepository courseRepository,
                                     AreaRepository areaRepository,
+                                    com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.GradingPeriodRepository gradingPeriodRepository,
                                     AcademicYearStateValidator yearValidator) {
         this.courseRepository = courseRepository;
         this.areaRepository = areaRepository;
+        this.gradingPeriodRepository = gradingPeriodRepository;
         this.yearValidator = yearValidator;
     }
 
@@ -89,7 +92,10 @@ public class CourseCommandServiceImpl implements CourseCommandService {
         Course course = courseRepository.findById(command.courseId())
                 .orElseThrow(() -> new CourseNotFoundException(command.courseId()));
 
-        course.addTopic(command.name());
+        var gradingPeriod = gradingPeriodRepository.findById(command.gradingPeriodId())
+                .orElseThrow(() -> new IllegalArgumentException("Grading period not found"));
+
+        course.addTopic(command.name(), gradingPeriod);
         courseRepository.save(course);
     }
 
@@ -99,7 +105,7 @@ public class CourseCommandServiceImpl implements CourseCommandService {
         Course course = courseRepository.findById(command.courseId())
                 .orElseThrow(() -> new CourseNotFoundException(command.courseId()));
 
-        course.reorderTopics(command.topicIdsInOrder());
+        course.reorderTopics(command.topics(), gradingPeriodRepository);
         courseRepository.save(course);
     }
 

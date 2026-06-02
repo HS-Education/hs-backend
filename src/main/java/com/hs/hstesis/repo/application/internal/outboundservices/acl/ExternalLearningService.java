@@ -6,6 +6,7 @@ import com.hs.hstesis.repo.domain.model.valueobjects.GradeLevel;
 import com.hs.hstesis.repo.domain.model.valueobjects.UserEnrollmentContext;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service("repoExternalLearningService")
@@ -43,4 +44,11 @@ public class ExternalLearningService {
                 ));
     }
 
+    public List<Long> getEnrolledCourseIds(Long userId) {
+        return learningContextFacade.getEnrolledCourseIds(userId);
+    }
+
+    public Optional<com.hs.hstesis.learning.interfaces.acl.dto.GradingPeriodData> getGradingPeriodByCourseAndBimester(Long courseId, String bimester) {
+        return learningContextFacade.getGradingPeriodByCourseAndBimester(courseId, bimester);
+    }
 }

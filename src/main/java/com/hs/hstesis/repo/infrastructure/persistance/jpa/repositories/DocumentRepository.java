@@ -19,7 +19,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      WHERE t.id.courseId = :courseId
        AND t.id.educationLevel = :educationLevel
        AND t.id.gradeLevel = :gradeLevel
-       AND d.status = 'UPLOADED'
+       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
     """)
     List<Document> findAccessibleDocuments(Long courseId, EducationLevel educationLevel, GradeLevel gradeLevel);
 
@@ -28,7 +28,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      FROM Document d
      JOIN d.targets t
      WHERE t.id.courseId = :courseId
-       AND d.status = 'UPLOADED'
+       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
     """)
     List<Document> findAllByCourseId(Long courseId);
 
@@ -37,7 +37,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
         FROM Document d
         LEFT JOIN FETCH d.targets t
         WHERE d.id = :documentId
-          AND d.status = 'UPLOADED'
+          AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
     """)
     Optional<Document> findByIdWithTargets(Long documentId);
 

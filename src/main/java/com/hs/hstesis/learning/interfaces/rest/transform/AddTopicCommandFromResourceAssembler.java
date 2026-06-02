@@ -5,6 +5,6 @@ import com.hs.hstesis.learning.interfaces.rest.resources.AddTopicResource;
 
 public class AddTopicCommandFromResourceAssembler {
     public static AddTopicCommand toCommandFromResource(Long courseId, AddTopicResource resource) {
-        return new AddTopicCommand(courseId, resource.name());
+        return new AddTopicCommand(courseId, resource.gradingPeriodId(), resource.name());
     }
 }
