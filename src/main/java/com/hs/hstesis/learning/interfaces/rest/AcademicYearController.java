@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping(value = "/api/v1/academic-years", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Academic Years", description = "Academic year management endpoints")
@@ -47,6 +46,7 @@ public class AcademicYearController {
         this.gradingPeriodCommandService = gradingPeriodCommandService;
     }
 
+@PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Create a new academic year.")
     @PostMapping
     public ResponseEntity<AcademicYearResource> generateYear() {
@@ -67,6 +67,7 @@ public class AcademicYearController {
         return new ResponseEntity<>(academicYearResource, HttpStatus.CREATED);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Return a list of all academic years.")
     @GetMapping
     public ResponseEntity<List<AcademicYearResource>> getAllAcademicYears() {
@@ -84,6 +85,7 @@ public class AcademicYearController {
         return ResponseEntity.ok(resources);
     }
 
+    @PreAuthorize("hasRole('ADMIN') || hasRole('COORDINATOR')")
     @Operation(description = "Return grading periods of an academic year.")
     @GetMapping("/{academicYearId}/grading-periods")
     public ResponseEntity<List<GradingPeriodResource>> getGradingPeriods(@PathVariable Long academicYearId) {
@@ -102,6 +104,7 @@ public class AcademicYearController {
         return ResponseEntity.ok(resources);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Configure dates of a grading period.")
     @PutMapping("/{academicYearId}/grading-periods/{gradingPeriodId}")
     public ResponseEntity<GradingPeriodResource> updateGradingPeriod(

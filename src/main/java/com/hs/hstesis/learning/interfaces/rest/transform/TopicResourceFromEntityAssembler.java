@@ -8,7 +8,8 @@ public class TopicResourceFromEntityAssembler {
         return new TopicResource(
                 entity.getId(),
                 entity.getName(),
-                entity.getOrderIndex()
+                entity.getOrderIndex(),
+                entity.getGradingPeriod().getId()
         );
     }
 }

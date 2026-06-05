@@ -1,4 +1,4 @@
 package com.hs.hstesis.learning.interfaces.rest.resources;
 
-public record TopicResource(Long id, String name, Integer orderIndex) {
+public record TopicResource(Long id, String name, Integer orderIndex, Long gradingPeriodId) {
 }

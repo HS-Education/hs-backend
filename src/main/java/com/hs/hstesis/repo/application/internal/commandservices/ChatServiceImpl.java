@@ -79,8 +79,8 @@ public class ChatServiceImpl implements ChatService {
             throw new AuthorizationDeniedException("Not your session");
         }
 
-        session.addMessage("user", question);
-        chatSessionRepository.saveAndFlush(session);
+        var userMsg = new ChatMessage(session, "user", question);
+        chatMessageRepository.save(userMsg);
 
         List<Long> courseIdsToSearch;
         if (session.getCourseId() != null && session.getCourseId() != 0L) {

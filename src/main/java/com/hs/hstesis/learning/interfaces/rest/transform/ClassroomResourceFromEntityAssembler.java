@@ -12,6 +12,7 @@ public class ClassroomResourceFromEntityAssembler {
                 SectionResourceFromEntityAssembler.toResourceFromEntity(entity.getSection()),
                 entity.getAcademicYear().getId(),
                 entity.getAcademicYear().getYear(),
+                entity.getAcademicYear().getStatus(),
                 entity.getStatus()
         );
     }

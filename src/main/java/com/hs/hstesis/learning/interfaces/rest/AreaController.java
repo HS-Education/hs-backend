@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@PreAuthorize("hasRole('ADMIN')")
 @RestController
 @RequestMapping(value = "/api/v1/areas", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Areas", description = "Area management endpoints")
@@ -36,6 +35,7 @@ public class AreaController {
         this.areaQueryService = areaQueryService;
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Creates a new area.")
     @PostMapping
     public ResponseEntity<AreaResource> createArea(@RequestBody CreateAreaResource createAreaResource) {
@@ -58,6 +58,7 @@ public class AreaController {
         return new ResponseEntity<>(areaResource, HttpStatus.CREATED);
     }
 
+    @PreAuthorize("hasRole('ADMIN') || hasRole('COORDINATOR')")
     @Operation(description = "Returns a list of all areas.")
     @GetMapping
     public ResponseEntity<List<AreaResource>> getAllAreas() {
@@ -69,11 +70,12 @@ public class AreaController {
         }
 
         var areaResources = areas.stream()
-                .map(AreaResourceFromQueryModelAssembler::toResourceFromQueryModel)
-                .toList();
+            .map(AreaResourceFromQueryModelAssembler::toResourceFromQueryModel)
+            .toList();
         return ResponseEntity.ok(areaResources);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Updates the details of an existing area.")
     @PatchMapping("/{areaId}")
     public ResponseEntity<AreaResource> updateArea(@PathVariable Long areaId, @RequestBody UpdateAreaResource updateAreaResource) {
@@ -96,6 +98,7 @@ public class AreaController {
         return ResponseEntity.ok(areaResource);
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(description = "Deletes an existing area. It must not have related courses.")
     @DeleteMapping("/{areaId}")
     public ResponseEntity<MessageResource> deleteArea(@PathVariable Long areaId) {
