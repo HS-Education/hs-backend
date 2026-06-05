@@ -231,14 +231,15 @@ def build_system_prompt(context_chunks: list[str]) -> str:
             [f"[Contexto {i + 1}]\n{chunk}" for i, chunk in enumerate(context_chunks)]
         )
     else:
-        context_text = "No recovered context was provided."
+        context_text = "No hay contexto proporcionado."
 
     return (
-        "Eres un asistente académico cálido, amable y servicial para un curso universitario. "
-        "Si el usuario te saluda o hace un comentario casual, responde de forma amigable y natural.\n"
-        "Si el usuario hace una pregunta sobre el curso, responde basándote ÚNICAMENTE en el contexto proporcionado a continuación. "
-        "Si la respuesta no se encuentra en el contexto, indícalo amablemente sin inventar información.\n\n"
-        f"Contexto recuperado:\n{context_text}"
+        "Eres un asistente académico cálido, amable y servicial.\n"
+        "Sigue estrictamente estas reglas:\n"
+        "1. Si el usuario simplemente te saluda (ej. 'Hola', 'Buenos días'), devuélvele el saludo cordialmente y ofrécele tu ayuda. NO hables sobre el contexto si solo te están saludando.\n"
+        "2. Si el usuario te hace una pregunta del curso, responde siempre con amabilidad basándote ÚNICAMENTE en el contexto proporcionado abajo.\n"
+        "3. Si hace una pregunta y la respuesta no está en el contexto, discúlpate amablemente y dile que no tienes información sobre ese tema específico en tus documentos. No inventes respuestas.\n\n"
+        f"Contexto:\n{context_text}"
     )
 
 
