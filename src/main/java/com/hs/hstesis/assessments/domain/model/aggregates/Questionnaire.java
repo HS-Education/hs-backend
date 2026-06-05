@@ -32,6 +32,28 @@ public class Questionnaire {
     @Column(nullable = false)
     private Integer weekNumber;
 
+    @Column(nullable = false)
+    private Integer allowedAttempts;
+
+    @Column(nullable = false)
+    private Integer questionsPerAttempt;
+
+    public Integer getWeekNumber() {
+        return weekNumber;
+    }
+
+    public Integer getAllowedAttempts() {
+        return allowedAttempts;
+    }
+
+    public Integer getQuestionsPerAttempt() {
+        return questionsPerAttempt;
+    }
+
+    public QuestionnaireStatus getStatus() {
+        return status;
+    }
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private QuestionnaireStatus status;
@@ -44,10 +66,12 @@ public class Questionnaire {
     @Column(nullable = false)
     private LocalDateTime updatedAt;
 
-    public Questionnaire(Long courseId, Long gradingPeriodId, Integer weekNumber) {
+    public Questionnaire(Long courseId, Long gradingPeriodId, Integer weekNumber, Integer allowedAttempts, Integer questionsPerAttempt) {
         this.courseId = courseId;
         this.gradingPeriodId = gradingPeriodId;
         this.weekNumber = weekNumber;
+        this.allowedAttempts = allowedAttempts;
+        this.questionsPerAttempt = questionsPerAttempt;
         this.status = QuestionnaireStatus.DRAFT;
     }
 }

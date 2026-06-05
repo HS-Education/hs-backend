@@ -59,22 +59,39 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
         var studentInstances = questionnaireInstanceRepository.findAllByStudentId(studentId);
 
         return baseQuestionnaires.stream().map(baseQ -> {
-            var instanceOpt = studentInstances.stream()
+            var allInstances = studentInstances.stream()
                     .filter(i -> i.getQuestionnaire().getId().equals(baseQ.getId()))
-                    .findFirst();
+                    .collect(java.util.stream.Collectors.toList());
 
             String status = "PENDING";
-            Long instanceId = null;
-
-            if (instanceOpt.isPresent()) {
-                instanceId = instanceOpt.get().getId();
-                var submission = submissionRepository.findByQuestionnaireInstanceIdAndStudentId(instanceId, studentId);
+            Long activeInstanceId = null;
+            int completedAttempts = 0;
+            
+            for (var instance : allInstances) {
+                var submission = submissionRepository.findByQuestionnaireInstanceIdAndStudentId(instance.getId(), studentId);
                 if (submission.isPresent()) {
-                    status = "COMPLETED";
+                    completedAttempts++;
                 } else {
+                    // There is an unfinished instance
                     status = "STARTED";
+                    activeInstanceId = instance.getId();
                 }
             }
+            
+            if (status.equals("PENDING") && completedAttempts > 0) {
+                if (completedAttempts >= baseQ.getAllowedAttempts()) {
+                    status = "COMPLETED";
+                } else {
+                    // Can still start another attempt, but we can call it PENDING or leave it PENDING so they can start
+                    status = "PENDING"; 
+                }
+            }
+            
+            int attemptsLeft = baseQ.getAllowedAttempts() - completedAttempts;
+            if (status.equals("STARTED")) {
+                attemptsLeft--; // The current started one counts towards limits usually, but it's already created.
+            }
+            if (attemptsLeft < 0) attemptsLeft = 0;
 
             return new com.hs.hstesis.assessments.interfaces.rest.resources.AvailableQuestionnaireResource(
                     baseQ.getId(),
@@ -82,7 +99,9 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
                     baseQ.getGradingPeriodId(),
                     baseQ.getWeekNumber(),
                     status,
-                    instanceId
+                    activeInstanceId,
+                    attemptsLeft,
+                    baseQ.getAllowedAttempts()
             );
         }).collect(java.util.stream.Collectors.toList());
     }

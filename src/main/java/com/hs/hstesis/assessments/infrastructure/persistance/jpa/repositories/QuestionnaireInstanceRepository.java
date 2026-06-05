@@ -9,7 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface QuestionnaireInstanceRepository extends JpaRepository<QuestionnaireInstance, Long> {
-    Optional<QuestionnaireInstance> findByQuestionnaireIdAndStudentId(Long questionnaireId, Long studentId);
+    List<QuestionnaireInstance> findAllByQuestionnaireIdAndStudentId(Long questionnaireId, Long studentId);
     Optional<QuestionnaireInstance> findByQuestionnaireIdAndStudentIdIsNull(Long questionnaireId);
     List<QuestionnaireInstance> findAllByStudentId(Long studentId);
 }

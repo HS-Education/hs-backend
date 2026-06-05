@@ -61,6 +61,16 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         var topic = externalLearningService.getTopicByCourseAndGradingPeriodAndOrderIndex(command.courseId(), command.gradingPeriodId(), command.weekNumber())
                 .orElseThrow(() -> new IllegalArgumentException("No topic found for the specified week number."));
 
+        int attempts = command.allowedAttempts() != null ? command.allowedAttempts() : 1;
+        if (attempts < 1) attempts = 1;
+        if (attempts > 3) attempts = 3;
+
+        int questionsPerAttempt = command.questionsPerAttempt() != null ? command.questionsPerAttempt() : 10;
+        if (questionsPerAttempt < 1) questionsPerAttempt = 1;
+        if (questionsPerAttempt > 10) questionsPerAttempt = 10;
+
+        int totalQuestionsToGenerate = questionsPerAttempt * 3;
+
         var chunks = externalRepoService.getDocumentChunksByTopicIds(List.of(topic.getId()));
         if (chunks.isEmpty()) {
             throw new IllegalStateException("No document chunks found for the topic.");
@@ -68,9 +78,9 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
 
         String contextText = String.join("\n\n", chunks);
 
-        var aiResponse = externalAiService.generateQuiz(contextText, topic.getName(), 10, false);
+        var aiResponse = externalAiService.generateQuiz(contextText, topic.getName(), totalQuestionsToGenerate, false);
 
-        var questionnaire = new Questionnaire(command.courseId(), command.gradingPeriodId(), command.weekNumber());
+        var questionnaire = new Questionnaire(command.courseId(), command.gradingPeriodId(), command.weekNumber(), attempts, questionsPerAttempt);
         questionnaireRepository.save(questionnaire);
 
         var baseInstance = new QuestionnaireInstance(questionnaire, null);
@@ -178,9 +188,19 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             throw new org.springframework.security.access.AccessDeniedException("Student is not enrolled in this course.");
         }
 
-        var existingInstance = instanceRepository.findByQuestionnaireIdAndStudentId(command.questionnaireId(), command.studentId());
-        if (existingInstance.isPresent()) {
-            return existingInstance.get().getId();
+        var existingInstances = instanceRepository.findAllByQuestionnaireIdAndStudentId(command.questionnaireId(), command.studentId());
+        
+        // Check if there is already an unfinished (STARTED) instance
+        var unfinished = existingInstances.stream()
+                .filter(i -> submissionRepository.findByQuestionnaireInstanceIdAndStudentId(i.getId(), command.studentId()).isEmpty())
+                .findFirst();
+                
+        if (unfinished.isPresent()) {
+            return unfinished.get().getId();
+        }
+        
+        if (existingInstances.size() >= questionnaire.getAllowedAttempts()) {
+            throw new IllegalStateException("You have reached the maximum number of attempts for this questionnaire.");
         }
 
         var studentInstance = new QuestionnaireInstance(questionnaire, command.studentId());
@@ -189,7 +209,14 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         var baseInstance = instanceRepository.findByQuestionnaireIdAndStudentIdIsNull(command.questionnaireId())
                 .orElseThrow(() -> new IllegalStateException("Base template for this questionnaire not found."));
 
-        for (var baseQ : questionRepository.findAllByQuestionnaireInstanceId(baseInstance.getId())) {
+        var allBaseQuestions = questionRepository.findAllByQuestionnaireInstanceId(baseInstance.getId());
+        
+        java.util.Collections.shuffle(allBaseQuestions);
+        var selectedQuestions = allBaseQuestions.stream()
+                .limit(questionnaire.getQuestionsPerAttempt())
+                .collect(java.util.stream.Collectors.toList());
+
+        for (var baseQ : selectedQuestions) {
             var clone = new Question(studentInstance, baseQ.getTopicId(), baseQ.getText(), baseQ.getOptions(), baseQ.getCorrectOptionIndex(), false);
             questionRepository.save(clone);
         }

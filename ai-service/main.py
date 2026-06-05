@@ -234,9 +234,11 @@ def build_system_prompt(context_chunks: list[str]) -> str:
         context_text = "No recovered context was provided."
 
     return (
-        "You are an academic assistant. Answer ONLY based on the context.\n"
-        "If the context does not contain the answer, state it explicitly.\n\n"
-        f"Context:\n{context_text}"
+        "Eres un asistente académico cálido, amable y servicial para un curso universitario. "
+        "Si el usuario te saluda o hace un comentario casual, responde de forma amigable y natural.\n"
+        "Si el usuario hace una pregunta sobre el curso, responde basándote ÚNICAMENTE en el contexto proporcionado a continuación. "
+        "Si la respuesta no se encuentra en el contexto, indícalo amablemente sin inventar información.\n\n"
+        f"Contexto recuperado:\n{context_text}"
     )
 
 

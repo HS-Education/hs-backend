@@ -126,7 +126,9 @@ public class QuestionnaireController {
                 .map(a -> new com.hs.hstesis.assessments.interfaces.rest.resources.SubmissionAnswerResource(
                         a.getQuestion().getId(),
                         a.getQuestion().getText(),
+                        a.getQuestion().getOptions(),
                         a.getSelectedOptionIndex(),
+                        a.getQuestion().getCorrectOptionIndex(),
                         a.getIsCorrect(),
                         a.getAiFeedback()
                 ))
