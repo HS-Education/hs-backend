@@ -7,4 +7,5 @@ public interface QuestionnaireCommandService {
     void handle(GenerateQuestionnaireCommand command);
     void handle(SubmitQuestionnaireCommand command);
     Long handle(com.hs.hstesis.assessments.domain.model.commands.StartQuestionnaireCommand command);
+    void handle(com.hs.hstesis.assessments.domain.model.commands.CreateDirectQuestionnaireCommand command);
 }

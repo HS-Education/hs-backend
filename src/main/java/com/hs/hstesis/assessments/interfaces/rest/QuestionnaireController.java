@@ -39,6 +39,24 @@ public class QuestionnaireController {
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
+    @PostMapping("/create-direct")
+    @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR')")
+    public ResponseEntity<Void> createDirectQuestionnaire(@RequestBody com.hs.hstesis.assessments.interfaces.rest.resources.CreateDirectQuestionnaireResource resource) {
+        var command = new com.hs.hstesis.assessments.domain.model.commands.CreateDirectQuestionnaireCommand(
+                resource.courseId(),
+                resource.gradingPeriodId(),
+                resource.weekNumber(),
+                resource.topicId(),
+                resource.allowedAttempts(),
+                resource.questionsPerAttempt(),
+                resource.questions().stream()
+                        .map(q -> new com.hs.hstesis.assessments.domain.model.commands.QuestionDraftRecord(q.text(), q.options(), q.correctOptionIndex()))
+                        .toList()
+        );
+        questionnaireCommandService.handle(command);
+        return new ResponseEntity<>(HttpStatus.CREATED);
+    }
+
     @PostMapping("/{questionnaireInstanceId}/submit")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<Void> submitQuestionnaire(

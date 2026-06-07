@@ -96,7 +96,11 @@ public class ChatServiceImpl implements ChatService {
 
         List<String> contextTexts = List.of();
         if (!courseIdsToSearch.isEmpty()) {
-            contextTexts = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString, 10);
+            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString, 10);
+            contextTexts = chunksWithMeta.stream()
+                .map(c -> String.format("Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s", 
+                     c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
+                .toList();
         }
 
         var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
