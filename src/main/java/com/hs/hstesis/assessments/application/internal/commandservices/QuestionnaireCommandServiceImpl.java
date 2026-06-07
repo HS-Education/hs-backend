@@ -93,39 +93,6 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     }
 
     @Override
-    @Transactional
-    public void handle(com.hs.hstesis.assessments.domain.model.commands.CreateDirectQuestionnaireCommand command) {
-        var existing = questionnaireRepository.findByCourseIdAndGradingPeriodIdAndWeekNumber(
-                command.courseId(), command.gradingPeriodId(), command.weekNumber());
-
-        if (existing.isPresent()) {
-            throw new IllegalStateException("A questionnaire already exists for this week.");
-        }
-
-        var topic = externalLearningService.getTopicByCourseAndGradingPeriodAndOrderIndex(command.courseId(), command.gradingPeriodId(), command.weekNumber())
-                .orElseThrow(() -> new IllegalArgumentException("No topic found for the specified week number."));
-
-        int attempts = command.allowedAttempts() != null ? command.allowedAttempts() : 1;
-        if (attempts < 1) attempts = 1;
-        if (attempts > 3) attempts = 3;
-
-        int questionsPerAttempt = command.questionsPerAttempt() != null ? command.questionsPerAttempt() : 10;
-        if (questionsPerAttempt < 1) questionsPerAttempt = 1;
-        if (questionsPerAttempt > 10) questionsPerAttempt = 10;
-
-        var questionnaire = new Questionnaire(command.courseId(), command.gradingPeriodId(), command.weekNumber(), attempts, questionsPerAttempt);
-        questionnaireRepository.save(questionnaire);
-
-        var baseInstance = new QuestionnaireInstance(questionnaire, null);
-        instanceRepository.save(baseInstance);
-
-        for (var q : command.questions()) {
-            var question = new Question(baseInstance, topic.getId(), q.text(), q.options(), q.correctOptionIndex(), false);
-            questionRepository.save(question);
-        }
-    }
-
-    @Override
     @org.springframework.transaction.annotation.Transactional
     public void handle(com.hs.hstesis.assessments.domain.model.commands.SubmitQuestionnaireCommand command) {
         var instance = instanceRepository.findById(command.questionnaireInstanceId())

@@ -6,10 +6,8 @@ import com.hs.hstesis.assessments.domain.model.queries.GetQuestionsByQuestionnai
 import com.hs.hstesis.assessments.domain.services.QuestionnaireCommandService;
 import com.hs.hstesis.assessments.domain.services.QuestionnaireQueryService;
 import com.hs.hstesis.assessments.interfaces.rest.resources.QuestionResource;
-import com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireInstanceResource;
 import com.hs.hstesis.assessments.interfaces.rest.resources.SubmitQuestionnaireResource;
 import com.hs.hstesis.assessments.interfaces.rest.transform.QuestionResourceFromEntityAssembler;
-import com.hs.hstesis.assessments.interfaces.rest.transform.QuestionnaireInstanceResourceFromEntityAssembler;
 import com.hs.hstesis.assessments.interfaces.rest.transform.SubmitQuestionnaireCommandFromResourceAssembler;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -35,24 +33,6 @@ public class QuestionnaireController {
     @PostMapping("/generate")
     @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR')")
     public ResponseEntity<Void> generateQuestionnaire(@RequestBody GenerateQuestionnaireCommand command) {
-        questionnaireCommandService.handle(command);
-        return new ResponseEntity<>(HttpStatus.CREATED);
-    }
-
-    @PostMapping("/create-direct")
-    @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR')")
-    public ResponseEntity<Void> createDirectQuestionnaire(@RequestBody com.hs.hstesis.assessments.interfaces.rest.resources.CreateDirectQuestionnaireResource resource) {
-        var command = new com.hs.hstesis.assessments.domain.model.commands.CreateDirectQuestionnaireCommand(
-                resource.courseId(),
-                resource.gradingPeriodId(),
-                resource.weekNumber(),
-                resource.topicId(),
-                resource.allowedAttempts(),
-                resource.questionsPerAttempt(),
-                resource.questions().stream()
-                        .map(q -> new com.hs.hstesis.assessments.domain.model.commands.QuestionDraftRecord(q.text(), q.options(), q.correctOptionIndex()))
-                        .toList()
-        );
         questionnaireCommandService.handle(command);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
