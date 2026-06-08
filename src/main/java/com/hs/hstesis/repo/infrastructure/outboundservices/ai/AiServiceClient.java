@@ -14,8 +14,8 @@ public class AiServiceClient {
     private final RestClient restClient;
 
     public AiServiceClient(
-            @Value("${ai.worker.url:http://localhost:8000}") String baseUrl,
-            @Value("${ai.worker.api-key:your-secure-api-key}") String apiKey) {
+            @Value("${ai.service.url:http://localhost:8000}") String baseUrl,
+            @Value("${ai.service.api-key:your-secure-api-key}") String apiKey) {
 
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)

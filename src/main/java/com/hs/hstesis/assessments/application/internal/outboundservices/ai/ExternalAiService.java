@@ -14,10 +14,10 @@ public class ExternalAiService {
 
     private final RestTemplate restTemplate;
 
-    @Value("${ai.worker.url:http://localhost:8000}")
+    @Value("${ai.service.url:http://localhost:8000}")
     private String aiServiceUrl;
 
-    @Value("${ai.worker.api-key:}")
+    @Value("${ai.service.api-key:}")
     private String apiKey;
 
     public ExternalAiService(RestTemplate restTemplate) {
