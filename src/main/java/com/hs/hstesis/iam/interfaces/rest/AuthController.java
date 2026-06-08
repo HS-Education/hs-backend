@@ -26,16 +26,18 @@ public class AuthController {
     private final SignInCommandService signInCommandService;
     private final RefreshTokenService refreshTokenService;
     private final TokenService tokenService;
+    private final com.hs.hstesis.iam.domain.services.UserCommandService userCommandService;
 
-    public AuthController(SignInCommandService signInCommandService, RefreshTokenService refreshTokenService, TokenService tokenService) {
+    public AuthController(SignInCommandService signInCommandService, RefreshTokenService refreshTokenService, TokenService tokenService, com.hs.hstesis.iam.domain.services.UserCommandService userCommandService) {
         this.signInCommandService = signInCommandService;
         this.refreshTokenService = refreshTokenService;
         this.tokenService = tokenService;
+        this.userCommandService = userCommandService;
     }
 
     @Operation(description = "Authenticates a user and returns a JWT token along with a refresh token in HttpOnly cookies.")
     @PostMapping("/sign-in")
-    public ResponseEntity<AuthenticatedUserResource> signIn(@RequestBody SignInResource resource) {
+    public ResponseEntity<?> signIn(@RequestBody SignInResource resource) {
 
         var signInCommand = SignInCommandFromResourceAssembler.toCommandFromResource(resource);
         var authenticatedUser = signInCommandService.handle(signInCommand);
@@ -45,6 +47,19 @@ public class AuthController {
         }
 
         var user = authenticatedUser.get().getLeft();
+        
+        if (user.isTemporaryPassword()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                java.util.Map.of("message", "Debe cambiar su contraseña", "reason", "TEMPORARY_PASSWORD")
+            );
+        }
+        
+        if (user.getLastPasswordChange() != null && user.getLastPasswordChange().plusDays(90).isBefore(java.time.LocalDateTime.now())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                java.util.Map.of("message", "Debe cambiar su contraseña", "reason", "PASSWORD_EXPIRED")
+            );
+        }
+
         var token = authenticatedUser.get().getRight();
 
         var refreshToken = refreshTokenService.createRefreshToken(user.getId());
@@ -123,6 +138,7 @@ public class AuthController {
         assert userDetails != null;
         var responseResource = new AuthenticatedUserResource(
                 userDetails.getId(),
+                userDetails.getName(),
                 userDetails.getUsername(),
                 userDetails.getRoles()
         );
@@ -144,5 +160,17 @@ public class AuthController {
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
                 .body(new MessageResource("Logged out successfully"));
+    }
+
+    @Operation(description = "Changes the user password.")
+    @PostMapping("/change-password")
+    public ResponseEntity<?> changePassword(@RequestBody com.hs.hstesis.iam.interfaces.rest.resources.ChangePasswordResource resource) {
+        try {
+            var command = new com.hs.hstesis.iam.domain.model.commands.ChangePasswordCommand(resource.username(), resource.oldPassword(), resource.newPassword());
+            userCommandService.handle(command);
+            return ResponseEntity.ok(java.util.Map.of("message", "Contraseña cambiada exitosamente"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(java.util.Map.of("message", e.getMessage()));
+        }
     }
 }

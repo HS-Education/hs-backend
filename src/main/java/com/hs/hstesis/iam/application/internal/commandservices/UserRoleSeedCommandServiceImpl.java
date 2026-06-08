@@ -106,6 +106,7 @@ public class UserRoleSeedCommandServiceImpl implements UserRoleCommandService {
             String encodedPassword = hashingService.encode(rawPassword);
             var command = new CreateUserCommand(name, username, encodedPassword);
             User user = new User(command);
+            user.setTemporaryPassword(false);
 
             roleNames.forEach(roleName -> {
                 Role role = roleRepository.findByRoleName(roleName)

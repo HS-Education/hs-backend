@@ -133,4 +133,20 @@ public class UserCommandServiceImpl implements UserCommandService {
         userRepository.save(user);
         return username;
     }
+
+    @Override
+    @Transactional
+    public void handle(com.hs.hstesis.iam.domain.model.commands.ChangePasswordCommand command) {
+        var user = userRepository.findByUsername(command.username())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        if (!hashingService.matches(command.oldPassword(), user.getPasswordHash())) {
+            throw new IllegalArgumentException("Incorrect old password");
+        }
+
+        user.setPasswordHash(hashingService.encode(command.newPassword()));
+        user.setTemporaryPassword(false);
+        user.setLastPasswordChange(java.time.LocalDateTime.now());
+        userRepository.save(user);
+    }
 }

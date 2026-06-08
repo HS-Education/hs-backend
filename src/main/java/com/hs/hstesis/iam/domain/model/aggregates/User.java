@@ -27,6 +27,12 @@ public class User extends AuditableAbstractAggregateRoot<User> {
     @Column(nullable = false, name = "is_active")
     private boolean isActive;
 
+    @Column(nullable = false, name = "is_temporary_password")
+    private boolean isTemporaryPassword;
+
+    @Column(nullable = false, name = "last_password_change")
+    private java.time.LocalDateTime lastPasswordChange;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",
@@ -42,6 +48,8 @@ public class User extends AuditableAbstractAggregateRoot<User> {
         this.username = command.username();
         this.passwordHash = command.passwordHash();
         this.isActive = true;
+        this.isTemporaryPassword = true; // Default to true when created
+        this.lastPasswordChange = java.time.LocalDateTime.now();
     }
 
     public boolean hasRole(String roleName) {

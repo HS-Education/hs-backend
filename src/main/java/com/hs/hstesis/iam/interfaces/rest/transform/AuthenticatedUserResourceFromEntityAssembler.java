@@ -14,6 +14,7 @@ public class AuthenticatedUserResourceFromEntityAssembler {
 
         return new AuthenticatedUserResource(
                 user.getId(),
+                user.getName(),
                 user.getUsername(),
                 roles
         );
