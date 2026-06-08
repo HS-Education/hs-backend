@@ -66,11 +66,17 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
             String status = "PENDING";
             Long activeInstanceId = null;
             int completedAttempts = 0;
+            java.util.List<com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireAttemptResource> pastAttempts = new java.util.ArrayList<>();
             
             for (var instance : allInstances) {
                 var submission = submissionRepository.findByQuestionnaireInstanceIdAndStudentId(instance.getId(), studentId);
                 if (submission.isPresent()) {
                     completedAttempts++;
+                    pastAttempts.add(new com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireAttemptResource(
+                            instance.getId(),
+                            submission.get().getScore(),
+                            submission.get().getSubmittedAt()
+                    ));
                 } else {
                     // There is an unfinished instance
                     status = "STARTED";
@@ -101,7 +107,9 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
                     status,
                     activeInstanceId,
                     attemptsLeft,
-                    baseQ.getAllowedAttempts()
+                    baseQ.getAllowedAttempts(),
+                    baseQ.getQuestionsPerAttempt(),
+                    pastAttempts
             );
         }).collect(java.util.stream.Collectors.toList());
     }

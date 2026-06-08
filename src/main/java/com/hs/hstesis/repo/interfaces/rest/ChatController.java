@@ -40,7 +40,16 @@ public class ChatController {
         
         var session = chatService.createSession(courseId, userId);
         
-        var resource = new ChatSessionResource(session.getId(), session.getCourseId(), session.getUserId());
+        var allSessions = chatService.getAllUserSessions(userId);
+        int sessionNumber = 1;
+        for (int i = 0; i < allSessions.size(); i++) {
+            if (allSessions.get(i).getId().equals(session.getId())) {
+                sessionNumber = i + 1;
+                break;
+            }
+        }
+        
+        var resource = new ChatSessionResource(session.getId(), session.getCourseId(), session.getUserId(), sessionNumber);
         return new ResponseEntity<>(resource, HttpStatus.CREATED);
     }
 
@@ -53,8 +62,14 @@ public class ChatController {
         Long validCourseId = (courseId != null && courseId != 0L) ? courseId : null;
         var sessions = chatService.getUserSessions(validCourseId, userId);
         
+        var allSessions = chatService.getAllUserSessions(userId);
+        java.util.Map<Long, Integer> sessionNumberMap = new java.util.HashMap<>();
+        for (int i = 0; i < allSessions.size(); i++) {
+            sessionNumberMap.put(allSessions.get(i).getId(), i + 1);
+        }
+        
         var resources = sessions.stream()
-                .map(s -> new ChatSessionResource(s.getId(), s.getCourseId(), s.getUserId()))
+                .map(s -> new ChatSessionResource(s.getId(), s.getCourseId(), s.getUserId(), sessionNumberMap.getOrDefault(s.getId(), 1)))
                 .toList();
                 
         return ResponseEntity.ok(resources);
@@ -71,8 +86,26 @@ public class ChatController {
         
         var session = chatService.updateSessionCourse(sessionId, userId, request.courseId());
         
-        var resource = new ChatSessionResource(session.getId(), session.getCourseId(), session.getUserId());
+        var allSessions = chatService.getAllUserSessions(userId);
+        int sessionNumber = 1;
+        for (int i = 0; i < allSessions.size(); i++) {
+            if (allSessions.get(i).getId().equals(session.getId())) {
+                sessionNumber = i + 1;
+                break;
+            }
+        }
+        
+        var resource = new ChatSessionResource(session.getId(), session.getCourseId(), session.getUserId(), sessionNumber);
         return ResponseEntity.ok(resource);
+    }
+
+    @PreAuthorize("hasAuthority('REPOSITORY_READ')")
+    @Operation(summary = "Delete a chat session")
+    @DeleteMapping(value = "/{sessionId}")
+    public ResponseEntity<Void> deleteSession(@PathVariable Long sessionId) {
+        var userId = iamContextFacade.getAuthenticatedUserId();
+        chatService.deleteSession(sessionId, userId);
+        return ResponseEntity.noContent().build();
     }
 
     @PreAuthorize("hasAuthority('REPOSITORY_READ')")

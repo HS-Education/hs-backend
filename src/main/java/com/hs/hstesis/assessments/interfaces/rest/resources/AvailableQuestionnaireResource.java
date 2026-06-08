@@ -1,5 +1,7 @@
 package com.hs.hstesis.assessments.interfaces.rest.resources;
 
+import java.util.List;
+
 public record AvailableQuestionnaireResource(
         Long id,
         Long courseId,
@@ -8,6 +10,8 @@ public record AvailableQuestionnaireResource(
         String status, // PENDING, STARTED, COMPLETED
         Long activeInstanceId,
         Integer attemptsLeft,
-        Integer maxAttempts
+        Integer maxAttempts,
+        Integer questionsPerAttempt,
+        List<QuestionnaireAttemptResource> pastAttempts
 ) {
 }

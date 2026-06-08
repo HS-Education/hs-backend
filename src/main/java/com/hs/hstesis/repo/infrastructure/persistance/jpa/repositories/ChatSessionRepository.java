@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface ChatSessionRepository extends JpaRepository<ChatSession, Long> {
     List<ChatSession> findAllByCourseIdAndUserId(Long courseId, Long userId);
+    List<ChatSession> findAllByUserIdOrderByIdAsc(Long userId);
 }

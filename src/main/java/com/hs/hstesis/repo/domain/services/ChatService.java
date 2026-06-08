@@ -11,4 +11,6 @@ public interface ChatService {
     List<ChatMessage> getSessionHistory(Long sessionId, Long userId);
     ChatMessage sendMessage(Long sessionId, Long userId, String question);
     ChatSession updateSessionCourse(Long sessionId, Long userId, Long courseId);
+    void deleteSession(Long sessionId, Long userId);
+    List<ChatSession> getAllUserSessions(Long userId);
 }

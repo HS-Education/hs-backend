@@ -141,4 +141,22 @@ public class ChatServiceImpl implements ChatService {
         
         return chatSessionRepository.save(session);
     }
+
+    @Override
+    @Transactional
+    public void deleteSession(Long sessionId, Long userId) {
+        var session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+
+        if (!session.getUserId().equals(userId)) {
+            throw new AuthorizationDeniedException("Not your session");
+        }
+
+        chatSessionRepository.delete(session);
+    }
+
+    @Override
+    public List<ChatSession> getAllUserSessions(Long userId) {
+        return chatSessionRepository.findAllByUserIdOrderByIdAsc(userId);
+    }
 }
