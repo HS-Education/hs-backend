@@ -16,13 +16,16 @@ public class UserCommandServiceImpl implements UserCommandService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final ExternalLearningService externalLearningService;
+    private final com.hs.hstesis.iam.application.internal.outboundservices.hashing.HashingService hashingService;
 
     public UserCommandServiceImpl(UserRepository userRepository,
                                   RoleRepository roleRepository,
-                                  ExternalLearningService externalLearningService) {
+                                  ExternalLearningService externalLearningService,
+                                  com.hs.hstesis.iam.application.internal.outboundservices.hashing.HashingService hashingService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.externalLearningService = externalLearningService;
+        this.hashingService = hashingService;
     }
 
     @Override
@@ -87,5 +90,47 @@ public class UserCommandServiceImpl implements UserCommandService {
 
         user.removeRole(role);
         userRepository.save(user);
+    }
+
+    @Override
+    @Transactional
+    public String handle(com.hs.hstesis.iam.domain.model.commands.SignUpCommand command) {
+        if (command.roles() == null || command.roles().isEmpty()) {
+            throw new IllegalArgumentException("Roles cannot be empty");
+        }
+
+        String primaryRole = command.roles().get(0);
+        String prefix = "C"; // Default (but we will overwrite based on role)
+        if (primaryRole.equals("ROLE_ADMIN")) prefix = "A";
+        else if (primaryRole.equals("ROLE_COORDINATOR")) prefix = "C";
+        else if (primaryRole.equals("ROLE_TEACHER")) prefix = "P";
+        else if (primaryRole.equals("ROLE_STUDENT")) prefix = "E";
+
+        int year = java.time.Year.now().getValue();
+        String username = "";
+        boolean unique = false;
+        java.util.Random random = new java.util.Random();
+
+        while (!unique) {
+            int randomNum = 1000 + random.nextInt(9000); // 4 digits
+            username = prefix + year + randomNum;
+            if (!userRepository.existsByUsername(username)) {
+                unique = true;
+            }
+        }
+
+        String encodedPassword = hashingService.encode(command.rawPassword());
+        var createUserCommand = new com.hs.hstesis.iam.domain.model.commands.CreateUserCommand(command.name(), username, encodedPassword);
+        com.hs.hstesis.iam.domain.model.aggregates.User user = new com.hs.hstesis.iam.domain.model.aggregates.User(createUserCommand);
+
+        final String finalUsername = username;
+        for (String roleName : command.roles()) {
+            com.hs.hstesis.iam.domain.model.entity.Role role = roleRepository.findByRoleName(roleName)
+                    .orElseThrow(() -> new InvalidRoleException(roleName, finalUsername));
+            user.getRoles().add(role);
+        }
+
+        userRepository.save(user);
+        return username;
     }
 }

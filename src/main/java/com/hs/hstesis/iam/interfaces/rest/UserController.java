@@ -60,4 +60,12 @@ public class UserController {
         userCommandService.handle(new RemoveRoleFromUserCommand(userId, roleId));
         return ResponseEntity.ok(new MessageResource("Role removed successfully"));
     }
+
+    @Operation(description = "Registers a new user and returns the auto-generated username.")
+    @PostMapping
+    public ResponseEntity<com.hs.hstesis.iam.interfaces.rest.resources.SignUpResponseResource> registerUser(@RequestBody com.hs.hstesis.iam.interfaces.rest.resources.SignUpResource resource) {
+        var command = new com.hs.hstesis.iam.domain.model.commands.SignUpCommand(resource.name(), resource.password(), resource.roles());
+        String username = userCommandService.handle(command);
+        return ResponseEntity.ok(new com.hs.hstesis.iam.interfaces.rest.resources.SignUpResponseResource(username, "Usuario creado exitosamente"));
+    }
 }
