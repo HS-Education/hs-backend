@@ -32,12 +32,14 @@ public class WebSecurityConfiguration {
     private final BearerTokenService tokenService;
     private final BCryptHashingService hashingService;
     private final AuthenticationEntryPoint unauthorizedRequestHandler;
+    private final com.hs.hstesis.iam.infrastructure.authorization.sfs.pipeline.CustomAccessDeniedHandler customAccessDeniedHandler;
 
-    public WebSecurityConfiguration(@Qualifier("defaultUserDetailsService") UserDetailsService userDetailsService, BearerTokenService tokenService, BCryptHashingService hashingService, AuthenticationEntryPoint authenticationEntryPoint) {
+    public WebSecurityConfiguration(@Qualifier("defaultUserDetailsService") UserDetailsService userDetailsService, BearerTokenService tokenService, BCryptHashingService hashingService, AuthenticationEntryPoint authenticationEntryPoint, com.hs.hstesis.iam.infrastructure.authorization.sfs.pipeline.CustomAccessDeniedHandler customAccessDeniedHandler) {
         this.userDetailsService = userDetailsService;
         this.tokenService = tokenService;
         this.hashingService = hashingService;
         this.unauthorizedRequestHandler = authenticationEntryPoint;
+        this.customAccessDeniedHandler = customAccessDeniedHandler;
     }
 
     @Bean
@@ -87,7 +89,9 @@ public class WebSecurityConfiguration {
 
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedRequestHandler))
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint(unauthorizedRequestHandler)
+                        .accessDeniedHandler(customAccessDeniedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()

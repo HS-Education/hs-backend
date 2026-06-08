@@ -27,10 +27,10 @@ public class User extends AuditableAbstractAggregateRoot<User> {
     @Column(nullable = false, name = "is_active")
     private boolean isActive;
 
-    @Column(nullable = false, name = "is_temporary_password")
+    @Column(name = "is_temporary_password", columnDefinition = "boolean default true")
     private boolean isTemporaryPassword;
 
-    @Column(nullable = false, name = "last_password_change")
+    @Column(name = "last_password_change", columnDefinition = "timestamp default current_timestamp")
     private java.time.LocalDateTime lastPasswordChange;
 
     @ManyToMany(fetch = FetchType.EAGER)

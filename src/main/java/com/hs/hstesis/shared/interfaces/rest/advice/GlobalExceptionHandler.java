@@ -90,12 +90,19 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(AccessDeniedException ex) {
+    public ResponseEntity<ApiErrorResponse> handleAccessDeniedException(AccessDeniedException ex, jakarta.servlet.http.HttpServletRequest request) {
         logger.error("Forbidden: {}", ex.getMessage());
+        
+        String message = "You do not have permission to access this resource.";
+        
+        if ("POST".equalsIgnoreCase(request.getMethod()) && request.getRequestURI().endsWith("/api/v1/users")) {
+            message = "Solo el administrador del sistema puede registrar nuevos usuarios.";
+        }
+        
         var errorResponse = new ApiErrorResponse(
                 HttpStatus.FORBIDDEN.value(),
                 HttpStatus.FORBIDDEN.getReasonPhrase(),
-                "You do not have permission to access this resource."
+                message
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
     }

@@ -99,12 +99,12 @@ public class UserCommandServiceImpl implements UserCommandService {
             throw new IllegalArgumentException("Roles cannot be empty");
         }
 
-        String primaryRole = command.roles().get(0);
+        String primaryRole = command.roles().get(0).toUpperCase();
         String prefix = "C"; // Default (but we will overwrite based on role)
-        if (primaryRole.equals("ROLE_ADMIN")) prefix = "A";
-        else if (primaryRole.equals("ROLE_COORDINATOR")) prefix = "C";
-        else if (primaryRole.equals("ROLE_TEACHER")) prefix = "P";
-        else if (primaryRole.equals("ROLE_STUDENT")) prefix = "E";
+        if (primaryRole.contains("ADMIN")) prefix = "A";
+        else if (primaryRole.contains("COORDINATOR")) prefix = "C";
+        else if (primaryRole.contains("TEACHER")) prefix = "P";
+        else if (primaryRole.contains("STUDENT")) prefix = "E";
 
         int year = java.time.Year.now().getValue();
         String username = "";
@@ -125,8 +125,9 @@ public class UserCommandServiceImpl implements UserCommandService {
 
         final String finalUsername = username;
         for (String roleName : command.roles()) {
-            com.hs.hstesis.iam.domain.model.entity.Role role = roleRepository.findByRoleName(roleName)
-                    .orElseThrow(() -> new InvalidRoleException(roleName, finalUsername));
+            String cleanRoleName = roleName.toUpperCase().replace("ROLE_", "");
+            com.hs.hstesis.iam.domain.model.entity.Role role = roleRepository.findByRoleName(cleanRoleName)
+                    .orElseThrow(() -> new InvalidRoleException(cleanRoleName, finalUsername));
             user.getRoles().add(role);
         }
 

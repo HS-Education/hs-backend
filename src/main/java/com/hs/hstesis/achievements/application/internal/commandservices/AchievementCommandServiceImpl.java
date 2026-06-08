@@ -21,16 +21,14 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
     private final AchievementInsightRepository achievementInsightRepository;
     private final AchievementQueryService achievementQueryService;
     private final ExternalAiService externalAiService;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AchievementCommandServiceImpl(AchievementInsightRepository achievementInsightRepository,
                                          AchievementQueryService achievementQueryService,
-                                         ExternalAiService externalAiService,
-                                         ObjectMapper objectMapper) {
+                                         ExternalAiService externalAiService) {
         this.achievementInsightRepository = achievementInsightRepository;
         this.achievementQueryService = achievementQueryService;
         this.externalAiService = externalAiService;
-        this.objectMapper = objectMapper;
     }
 
     @Override

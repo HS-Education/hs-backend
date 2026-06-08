@@ -13,10 +13,6 @@ import lombok.Setter;
 @NoArgsConstructor
 public class AchievementInsight extends AuditableAbstractAggregateRoot<AchievementInsight> {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
     // e.g., "STUDENT", "CLASSROOM", "AREA"
     @Column(nullable = false)
     private String entityType;
