@@ -60,18 +60,21 @@ public class UserRoleSeedCommandServiceImpl implements UserRoleCommandService {
         createRoleIfNotFound(Roles.ROLE_ADMIN, Set.of(classroomRead, classroomMembersRead, topicsRead, repositoryRead));
 
         String STUDENT_USERNAME = dotenv.get("STUDENT_USERNAME");
+        String STUDENT2_USERNAME = dotenv.get("STUDENT2_USERNAME");
         String TEACHER_USERNAME = dotenv.get("TEACHER_USERNAME");
         String COORDINATOR_USERNAME = dotenv.get("COORDINATOR_USERNAME");
         String ADMIN_USERNAME = dotenv.get("ADMIN_USERNAME");
         String COORDINATOR2_USERNAME = dotenv.get("COORDINATOR2_USERNAME");
 
         String STUDENT_PASSWORD = dotenv.get("STUDENT_PASSWORD");
+        String STUDENT2_PASSWORD = dotenv.get("STUDENT2_PASSWORD");
         String TEACHER_PASSWORD = dotenv.get("TEACHER_PASSWORD");
         String COORDINATOR_PASSWORD = dotenv.get("COORDINATOR_PASSWORD");
         String ADMIN_PASSWORD = dotenv.get("ADMIN_PASSWORD");
         String COORDINATOR2_PASSWORD = dotenv.get("COORDINATOR2_PASSWORD");
 
         createDefaultUserIfNotFound("Henry", STUDENT_USERNAME, STUDENT_PASSWORD, List.of(Roles.ROLE_STUDENT));
+        createDefaultUserIfNotFound("Ana", STUDENT2_USERNAME, STUDENT2_PASSWORD, List.of(Roles.ROLE_STUDENT));
         createDefaultUserIfNotFound("John", TEACHER_USERNAME, TEACHER_PASSWORD, List.of(Roles.ROLE_TEACHER));
         createDefaultUserIfNotFound("Sebastian", COORDINATOR_USERNAME, COORDINATOR_PASSWORD, List.of(Roles.ROLE_TEACHER, Roles.ROLE_COORDINATOR));
         createDefaultUserIfNotFound("Alonso", COORDINATOR2_USERNAME, COORDINATOR2_PASSWORD, List.of(Roles.ROLE_TEACHER, Roles.ROLE_COORDINATOR));
