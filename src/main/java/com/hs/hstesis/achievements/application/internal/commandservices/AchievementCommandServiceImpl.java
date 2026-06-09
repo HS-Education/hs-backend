@@ -10,7 +10,11 @@ import com.hs.hstesis.achievements.domain.model.commands.GenerateStudentInsightC
 import com.hs.hstesis.achievements.domain.model.queries.GetAreaPerformanceQuery;
 import com.hs.hstesis.achievements.domain.model.queries.GetClassroomPerformanceQuery;
 import com.hs.hstesis.achievements.domain.model.queries.GetStudentPerformanceQuery;
+import java.util.List;
 import com.hs.hstesis.achievements.application.internal.outboundservices.ai.ExternalAiService;
+import com.hs.hstesis.achievements.application.internal.outboundservices.acl.ExternalLearningService;
+import com.hs.hstesis.achievements.application.internal.outboundservices.acl.ExternalRepoService;
+import com.hs.hstesis.repo.interfaces.acl.dto.DocumentBasicData;
 import com.hs.hstesis.achievements.infrastructure.persistence.jpa.repositories.AchievementInsightRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +25,34 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
     private final AchievementInsightRepository achievementInsightRepository;
     private final AchievementQueryService achievementQueryService;
     private final ExternalAiService externalAiService;
+    private final ExternalLearningService externalLearningService;
+    private final ExternalRepoService externalRepoService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AchievementCommandServiceImpl(AchievementInsightRepository achievementInsightRepository,
                                          AchievementQueryService achievementQueryService,
-                                         ExternalAiService externalAiService) {
+                                         ExternalAiService externalAiService,
+                                         ExternalLearningService externalLearningService,
+                                         ExternalRepoService externalRepoService) {
         this.achievementInsightRepository = achievementInsightRepository;
         this.achievementQueryService = achievementQueryService;
         this.externalAiService = externalAiService;
+        this.externalLearningService = externalLearningService;
+        this.externalRepoService = externalRepoService;
+    }
+
+    private String buildDocumentsContext(List<Long> courseIds) {
+        if (courseIds == null || courseIds.isEmpty()) return "";
+        List<DocumentBasicData> documents = externalRepoService.getDocumentsByCourseIds(courseIds);
+        if (documents.isEmpty()) return "";
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("DOCUMENTOS DISPONIBLES EN EL REPOSITORIO:\n");
+        for (DocumentBasicData doc : documents) {
+            String url = String.format("/api/v1/courses/%d/documents/%d/download", doc.courseId(), doc.id());
+            sb.append("- ").append(doc.title()).append(" (URL: ").append(url).append(")\n");
+        }
+        return sb.toString();
     }
 
     @Override
@@ -41,7 +65,10 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
 
         try {
             String jsonData = objectMapper.writeValueAsString(performanceOpt.get());
-            String insightText = externalAiService.generateInsight(jsonData, "estudiante");
+            List<Long> courseIds = externalLearningService.getEnrolledCourseIds(command.studentId());
+            String docsContext = buildDocumentsContext(courseIds);
+            
+            String insightText = externalAiService.generateInsight(jsonData, "estudiante", docsContext);
             
             var insight = new AchievementInsight("STUDENT", command.studentId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -60,7 +87,11 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
 
         try {
             String jsonData = objectMapper.writeValueAsString(performanceOpt.get());
-            String insightText = externalAiService.generateInsight(jsonData, "profesor");
+            List<Long> courseIds = externalLearningService.getCourseIdByClassroomId(command.classroomId())
+                    .map(List::of).orElse(List.of());
+            String docsContext = buildDocumentsContext(courseIds);
+            
+            String insightText = externalAiService.generateInsight(jsonData, "profesor", docsContext);
             
             var insight = new AchievementInsight("CLASSROOM", command.classroomId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -79,7 +110,10 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
 
         try {
             String jsonData = objectMapper.writeValueAsString(performanceOpt.get());
-            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico");
+            List<Long> courseIds = externalLearningService.getCoursesByAreaId(command.areaId());
+            String docsContext = buildDocumentsContext(courseIds);
+            
+            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico", docsContext);
             
             var insight = new AchievementInsight("AREA", command.areaId(), insightText);
             return achievementInsightRepository.save(insight);

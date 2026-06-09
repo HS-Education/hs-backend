@@ -63,7 +63,7 @@ public class QuestionnaireController {
     }
 
     @GetMapping("/available")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ResponseEntity<List<com.hs.hstesis.assessments.interfaces.rest.resources.AvailableQuestionnaireResource>> getAvailableQuestionnaires(org.springframework.security.core.Authentication authentication) {
         var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication.getPrincipal();
         Long studentId = userDetails.getId();

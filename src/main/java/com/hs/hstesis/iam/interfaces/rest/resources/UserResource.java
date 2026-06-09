@@ -4,6 +4,7 @@ import java.util.List;
 
 public record UserResource(Long id,
                            String name,
+                           String username,
                            boolean isActive,
                            List<String> roles) {
 }

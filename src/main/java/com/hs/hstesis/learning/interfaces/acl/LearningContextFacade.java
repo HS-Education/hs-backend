@@ -5,6 +5,9 @@ import com.hs.hstesis.learning.domain.services.AreaQueryService;
 import com.hs.hstesis.learning.domain.services.ClassroomQueryService;
 import com.hs.hstesis.learning.domain.services.CourseQueryService;
 import com.hs.hstesis.learning.domain.services.EnrollmentQueryService;
+import com.hs.hstesis.learning.application.querymodels.AreaWithCoordinatorQueryModel;
+import com.hs.hstesis.learning.domain.model.aggregates.Classroom;
+import com.hs.hstesis.learning.domain.model.aggregates.Course;
 import com.hs.hstesis.learning.interfaces.acl.dto.UserEnrollmentData;
 import org.springframework.stereotype.Component;
 
@@ -116,5 +119,35 @@ public class LearningContextFacade {
         return course.get().getTopics().stream()
                 .filter(t -> t.getGradingPeriod().getId().equals(gradingPeriodId) && t.getOrderIndex().equals(orderIndex))
                 .findFirst();
+    }
+
+    public List<com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData> getStudentsByClassroom(Long classroomId) {
+        if (classroomId == null) return List.of();
+        var members = enrollmentQueryService.handle(new com.hs.hstesis.learning.domain.model.queries.GetClassroomMembersQuery(classroomId));
+        return members.stream()
+                .filter(m -> "STUDENT".equals(m.roleInClassroom()))
+                .map(m -> new com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData(m.userId(), m.userName()))
+                .toList();
+    }
+
+    public Optional<AreaWithCoordinatorQueryModel> getAreaById(Long areaId) {
+        if (areaId == null) return Optional.empty();
+        return areaQueryService.handle(new GetAreaByIdQuery(areaId));
+    }
+
+    public List<Course> getCoursesByAreaId(Long areaId) {
+        if (areaId == null) return List.of();
+        return courseQueryService.handle(new GetCoursesByAreaIdQuery(areaId));
+    }
+
+    public List<Classroom> getClassroomsByCourseId(Long courseId) {
+        if (courseId == null) return List.of();
+        return classroomQueryService.handle(new GetClassroomsByCourseIdQuery(courseId));
+    }
+
+    public Optional<Long> getCourseIdByClassroomId(Long classroomId) {
+        if (classroomId == null) return Optional.empty();
+        return classroomQueryService.handle(new GetClassroomByIdQuery(classroomId))
+                .map(c -> c.getCourse().getId());
     }
 }

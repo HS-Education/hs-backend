@@ -10,6 +10,7 @@ public class UserResourceFromEntityAssembler {
     public static UserResource toResourceFromEntity(User user) {
         return new UserResource(
                 user.getId(),
+                user.getName(),
                 user.getUsername(),
                 user.isActive(),
                 user.getRoles().stream().map(Role::getRoleName).collect(Collectors.toList())

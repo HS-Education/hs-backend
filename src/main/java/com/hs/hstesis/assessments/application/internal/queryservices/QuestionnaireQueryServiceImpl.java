@@ -109,7 +109,8 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
                     attemptsLeft,
                     baseQ.getAllowedAttempts(),
                     baseQ.getQuestionsPerAttempt(),
-                    pastAttempts
+                    pastAttempts,
+                    baseQ.getCreatedAt() != null ? baseQ.getCreatedAt().toString() : ""
             );
         }).collect(java.util.stream.Collectors.toList());
     }

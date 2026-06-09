@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping(value ="/api/v1/classrooms", produces = MediaType.APPLICATION_JSON_VALUE)
+@RequestMapping(value = "/api/v1/classrooms", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Classrooms", description = "Classroom management endpoints")
 public class ClassroomController {
     private final ClassroomCommandService classroomCommandService;
@@ -33,8 +33,8 @@ public class ClassroomController {
     private final EnrollmentQueryService enrollmentQueryService;
 
     public ClassroomController(ClassroomCommandService classroomCommandService,
-                               ClassroomQueryService classroomQueryService,
-                               EnrollmentQueryService enrollmentQueryService) {
+            ClassroomQueryService classroomQueryService,
+            EnrollmentQueryService enrollmentQueryService) {
         this.classroomCommandService = classroomCommandService;
         this.classroomQueryService = classroomQueryService;
         this.enrollmentQueryService = enrollmentQueryService;
@@ -46,20 +46,21 @@ public class ClassroomController {
     public ResponseEntity<MessageResource> generateAllClassrooms() {
         int totalCreated = classroomCommandService.handle(new GenerateClassroomsCommand());
         if (totalCreated == 0) {
-            return ResponseEntity.ok(new MessageResource("No new classrooms were created (they already exist or no study plan is configured)"));
+            return ResponseEntity.ok(new MessageResource(
+                    "No new classrooms were created (they already exist or no study plan is configured)"));
         }
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new MessageResource(String.format("%d classrooms generated successfully", totalCreated)));
     }
 
-    @PreAuthorize("hasAuthority('CLASSROOM_READ') and (@classroomSecurity.isMember(#classroomId) or hasRole('ADMIN') or hasRole('COORDINATOR'))")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COORDINATOR') or @classroomSecurity.isMember(#classroomId)")
     @Operation(description = "Retrieves a classroom.")
     @GetMapping("/{classroomId}")
     public ResponseEntity<ClassroomResource> getClassroomById(@PathVariable Long classroomId) {
         var getClassroomByIdQuery = new GetClassroomByIdQuery(classroomId);
         var classroom = classroomQueryService.handle(getClassroomByIdQuery);
 
-        if(classroom.isEmpty()) {
+        if (classroom.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
@@ -67,7 +68,7 @@ public class ClassroomController {
         return ResponseEntity.ok(classroomResource);
     }
 
-    @PreAuthorize("hasAuthority('CLASSROOM_READ') and (#userId == null ? hasRole('ADMIN') : (#userId == authentication.principal.id or hasRole('ADMIN')))")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COORDINATOR') or (#userId != null and #userId == authentication.principal.id)")
     @Operation(description = "Retrieves all classrooms or filters them by userId")
     @GetMapping
     public ResponseEntity<List<ClassroomResource>> getClassrooms(
@@ -88,7 +89,7 @@ public class ClassroomController {
         return ResponseEntity.ok(resources);
     }
 
-    @PreAuthorize("hasAuthority('CLASSROOM_MEMBERS_READ') and (@classroomSecurity.isMember(#classroomId) or hasRole('ADMIN') or hasRole('COORDINATOR'))")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('COORDINATOR') or @classroomSecurity.isMember(#classroomId)")
     @Operation(description = "Retrieves all members of a classroom")
     @GetMapping("/{classroomId}/members")
     public ResponseEntity<List<EnrollmentResource>> getClassroomMembers(@PathVariable Long classroomId) {

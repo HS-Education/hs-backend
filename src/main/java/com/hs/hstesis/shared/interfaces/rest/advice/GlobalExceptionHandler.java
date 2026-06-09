@@ -155,7 +155,8 @@ public class GlobalExceptionHandler {
             DocumentAlreadyExistsException.class,
             TopicAlreadyExistsException.class,
             InvalidDocumentStatusTransitionException.class,
-            DocumentChunksRequiredException.class
+            DocumentChunksRequiredException.class,
+            IllegalStateException.class
     })
     public ResponseEntity<ApiErrorResponse> handleConflict(RuntimeException ex) {
         logger.error("Conflict: {}", ex.getMessage());

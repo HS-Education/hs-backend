@@ -33,6 +33,15 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     List<Document> findAllByCourseId(Long courseId);
 
     @Query("""
+     SELECT DISTINCT d
+     FROM Document d
+     JOIN d.targets t
+     WHERE t.id.courseId IN :courseIds
+       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
+    """)
+    List<Document> findAllByCourseIdIn(List<Long> courseIds);
+
+    @Query("""
         SELECT DISTINCT d
         FROM Document d
         LEFT JOIN FETCH d.targets t

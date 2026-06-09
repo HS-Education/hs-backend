@@ -24,7 +24,7 @@ public class ExternalAiService {
         this.restTemplate = restTemplate;
     }
 
-    public String generateInsight(String performanceJsonData, String targetAudience) {
+    public String generateInsight(String performanceJsonData, String targetAudience, String docsContext) {
         String url = aiServiceUrl + "/generate";
 
         HttpHeaders headers = new HttpHeaders();
@@ -34,14 +34,17 @@ public class ExternalAiService {
         }
 
         String prompt = String.format(
-            "Eres un analista académico experto. A continuación te proveo los datos de rendimiento en formato JSON. " +
+            "Eres un analista académico experto (Sery). A continuación te proveo los datos de rendimiento en formato JSON. " +
             "Genera un insight analítico breve y útil (máximo 3 párrafos) dirigido a un %s. " +
-            "Destaca los puntos fuertes y los temas donde se necesita refuerzo.\n\nDatos:\n%s",
-            targetAudience, performanceJsonData
+            "Destaca los puntos fuertes y los temas donde se necesita refuerzo. " +
+            "IMPORTANTE: Si eres dirigido a un 'profesor' y detectas que hay alumnos con bajo rendimiento en ciertos temas (ej. menor a 60%%), " +
+            "debes ser PROACTIVO y sugerirle directamente al profesor la creación de un cuestionario complementario para esos alumnos o temas.\n" +
+            "Ademas, tienes a tu disposición la siguiente lista de documentos de la asignatura. Para los temas donde el rendimiento sea bajo, recomienda al usuario leer los documentos correspondientes utilizando ESTE FORMATO EXACTO: **Fuente:** [Nombre del Documento] **Enlace de descarga:** [URL].\n\nDatos de Rendimiento:\n%s\n\n%s",
+            targetAudience, performanceJsonData, docsContext
         );
 
         GenerateRequest requestBody = new GenerateRequest(
-                List.of(), // no context chunks
+                List.of("DATOS DE RENDIMIENTO A ANALIZAR: " + performanceJsonData, docsContext), // add data to context chunks
                 List.of(new Message("user", prompt)),
                 1000,
                 0.7
