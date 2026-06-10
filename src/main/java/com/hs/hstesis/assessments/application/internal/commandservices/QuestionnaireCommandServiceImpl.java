@@ -93,6 +93,39 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     }
 
     @Override
+    @Transactional
+    public void handle(com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
+        var chunks = externalRepoService.getDocumentChunksByTopicIds(List.of(command.topicId()));
+        if (chunks.isEmpty()) {
+            throw new IllegalStateException("No document chunks found for the specified topic.");
+        }
+
+        String contextText = String.join("\n\n", chunks);
+
+        // Generate 10 questions for remedial
+        var aiResponse = externalAiService.generateQuiz(contextText, "Remedial Topic " + command.topicId(), 10, true);
+
+        var questionnaire = new Questionnaire(
+                command.courseId(), 
+                command.gradingPeriodId(), 
+                command.weekNumber(), 
+                1, // 1 attempt
+                10, // 10 questions
+                command.studentId(), 
+                com.hs.hstesis.assessments.domain.model.valueobjects.QuestionnaireType.REMEDIAL
+        );
+        questionnaireRepository.save(questionnaire);
+
+        var baseInstance = new QuestionnaireInstance(questionnaire, null);
+        instanceRepository.save(baseInstance);
+
+        for (var q : aiResponse.questions()) {
+            var question = new Question(baseInstance, command.topicId(), q.text(), q.options(), q.correctOptionIndex(), true);
+            questionRepository.save(question);
+        }
+    }
+
+    @Override
     @org.springframework.transaction.annotation.Transactional
     public void handle(com.hs.hstesis.assessments.domain.model.commands.SubmitQuestionnaireCommand command) {
         var instance = instanceRepository.findById(command.questionnaireInstanceId())

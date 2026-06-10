@@ -37,6 +37,13 @@ public class QuestionnaireController {
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
+    @PostMapping("/generate-remedial")
+    @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR')")
+    public ResponseEntity<Void> generateRemedialQuestionnaire(@RequestBody com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
+        questionnaireCommandService.handle(command);
+        return new ResponseEntity<>(HttpStatus.CREATED);
+    }
+
     @PostMapping("/{questionnaireInstanceId}/submit")
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<Void> submitQuestionnaire(
@@ -136,7 +143,31 @@ public class QuestionnaireController {
                 submission.getScore(),
                 answerResources
         );
-        
         return ResponseEntity.ok(resource);
+    }
+
+    @GetMapping("/submissions")
+    @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR') or hasRole('ADMIN')")
+    public ResponseEntity<List<com.hs.hstesis.assessments.interfaces.rest.resources.StudentGradeResource>> getAllSubmissions() {
+        var query = new com.hs.hstesis.assessments.domain.model.queries.GetAllQuestionnaireSubmissionsQuery();
+        var submissions = questionnaireQueryService.handle(query);
+        
+        var resources = submissions.stream()
+                .map(sub -> {
+                    var instance = sub.getQuestionnaireInstance();
+                    var questionnaire = instance.getQuestionnaire();
+                    return new com.hs.hstesis.assessments.interfaces.rest.resources.StudentGradeResource(
+                            sub.getStudentId(),
+                            instance.getId(),
+                            questionnaire.getId(),
+                            questionnaire.getCourseId(),
+                            questionnaire.getWeekNumber(),
+                            sub.getScore(),
+                            sub.getSubmittedAt()
+                    );
+                })
+                .collect(Collectors.toList());
+                
+        return ResponseEntity.ok(resources);
     }
 }

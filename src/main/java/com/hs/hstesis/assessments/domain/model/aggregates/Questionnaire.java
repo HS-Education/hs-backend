@@ -1,6 +1,7 @@
 package com.hs.hstesis.assessments.domain.model.aggregates;
 
 import com.hs.hstesis.assessments.domain.model.valueobjects.QuestionnaireStatus;
+import com.hs.hstesis.assessments.domain.model.valueobjects.QuestionnaireType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,6 +39,13 @@ public class Questionnaire {
     @Column(nullable = false)
     private Integer questionsPerAttempt;
 
+    @Column(nullable = true)
+    private Long targetStudentId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, columnDefinition = "varchar(255) default 'NORMAL'")
+    private QuestionnaireType type;
+
     public Integer getWeekNumber() {
         return weekNumber;
     }
@@ -73,5 +81,17 @@ public class Questionnaire {
         this.allowedAttempts = allowedAttempts;
         this.questionsPerAttempt = questionsPerAttempt;
         this.status = QuestionnaireStatus.DRAFT;
+        this.type = QuestionnaireType.NORMAL;
+    }
+
+    public Questionnaire(Long courseId, Long gradingPeriodId, Integer weekNumber, Integer allowedAttempts, Integer questionsPerAttempt, Long targetStudentId, QuestionnaireType type) {
+        this.courseId = courseId;
+        this.gradingPeriodId = gradingPeriodId;
+        this.weekNumber = weekNumber;
+        this.allowedAttempts = allowedAttempts;
+        this.questionsPerAttempt = questionsPerAttempt;
+        this.status = QuestionnaireStatus.DRAFT;
+        this.targetStudentId = targetStudentId;
+        this.type = type;
     }
 }

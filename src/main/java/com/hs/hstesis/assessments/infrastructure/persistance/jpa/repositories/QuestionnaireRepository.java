@@ -9,4 +9,5 @@ import java.util.Optional;
 @Repository
 public interface QuestionnaireRepository extends JpaRepository<Questionnaire, Long> {
     Optional<Questionnaire> findByCourseIdAndGradingPeriodIdAndWeekNumber(Long courseId, Long gradingPeriodId, Integer weekNumber);
+    java.util.List<Questionnaire> findAllByCourseIdAndGradingPeriodId(Long courseId, Long gradingPeriodId);
 }

@@ -12,6 +12,7 @@ import java.util.Optional;
 
 public interface AchievementQueryService {
     Optional<StudentPerformance> handle(GetStudentPerformanceQuery query);
+    Optional<com.hs.hstesis.achievements.domain.model.valueobjects.StudentPerformanceSummary> handle(com.hs.hstesis.achievements.domain.model.queries.GetStudentPerformanceSummaryQuery query);
     Optional<ClassroomPerformance> handle(GetClassroomPerformanceQuery query);
     Optional<AreaPerformance> handle(GetAreaPerformanceQuery query);
 }

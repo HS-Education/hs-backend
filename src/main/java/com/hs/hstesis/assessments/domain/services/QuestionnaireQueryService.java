@@ -12,4 +12,5 @@ public interface QuestionnaireQueryService {
     List<Question> handle(GetQuestionsByQuestionnaireInstanceIdQuery query);
     List<com.hs.hstesis.assessments.interfaces.rest.resources.AvailableQuestionnaireResource> handle(com.hs.hstesis.assessments.domain.model.queries.GetAvailableQuestionnairesQuery query);
     java.util.Optional<com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission> handle(com.hs.hstesis.assessments.domain.model.queries.GetSubmissionByInstanceIdQuery query);
+    List<com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission> handle(com.hs.hstesis.assessments.domain.model.queries.GetAllQuestionnaireSubmissionsQuery query);
 }

@@ -33,14 +33,22 @@ public class ExternalAiService {
             headers.set("X-API-Key", apiKey);
         }
 
+        String audienceInstructions = "";
+        if ("estudiante".equals(targetAudience)) {
+            audienceInstructions = "Si el estudiante tiene calificaciones bajas (menores o iguales a 13 o 60%), debes darle recomendaciones globales directas: dile qué temas exactos debe estudiar, qué conceptos debe repasar y dale sugerencias prácticas de mejora que él podría aplicar. Por el contrario, si el estudiante tiene calificaciones altas (mayores o iguales a 16 u 80%), dale recomendaciones muy positivas, motívalo a seguir así y explícitamente NO recomiendes cuestionarios de repaso para estos casos sobresalientes.";
+        } else if ("profesor".equals(targetAudience)) {
+            audienceInstructions = "Si hay alumnos con bajas calificaciones (menores o iguales a 13 o 60%), sugiere qué temas deben reforzar y RECUÉRDALE AL PROFESOR explícitamente que tiene la opción en el sistema de generar un 'Cuestionario de Repaso' personalizado para esos alumnos en esos temas. Sin embargo, para los alumnos con notas altas (mayores o iguales a 16 u 80%), dale recomendaciones positivas al profesor y aclara que a ellos NO se les debe generar cuestionarios de repaso.";
+        } else if ("coordinador académico".equals(targetAudience)) {
+            audienceInstructions = "Tus recomendaciones deben ser de observación directiva. Si el aula tiene buen rendimiento (promedio mayor o igual a 16 u 80%), felicita indicando algo como 'Dale un ojo a esta aula que está TOP, excelente trabajo' y aclara que no requieren intervención con cuestionarios. Si el aula o áreas están mal, advierte diciendo 'Ponle el ojo a esta aula/área, están bajos' y sugiere estrategias paulatinas de mejora.";
+        }
+
         String prompt = String.format(
             "Eres un analista académico experto (Sery). A continuación te proveo los datos de rendimiento en formato JSON. " +
             "Genera un insight analítico breve y útil (máximo 3 párrafos) dirigido a un %s. " +
-            "Destaca los puntos fuertes y los temas donde se necesita refuerzo. " +
-            "IMPORTANTE: Si eres dirigido a un 'profesor' y detectas que hay alumnos con bajo rendimiento en ciertos temas (ej. menor a 60%%), " +
-            "debes ser PROACTIVO y sugerirle directamente al profesor la creación de un cuestionario complementario para esos alumnos o temas.\n" +
-            "Ademas, tienes a tu disposición la siguiente lista de documentos de la asignatura. Para los temas donde el rendimiento sea bajo, recomienda al usuario leer los documentos correspondientes utilizando ESTE FORMATO EXACTO: **Fuente:** [Nombre del Documento] **Enlace de descarga:** [URL].\n\nDatos de Rendimiento:\n%s\n\n%s",
-            targetAudience, performanceJsonData, docsContext
+            "Destaca los puntos fuertes y los temas donde se necesita refuerzo.\n" +
+            "INSTRUCCIONES ESPECÍFICAS SEGÚN TU AUDIENCIA:\n%s\n\n" +
+            "Además, tienes a tu disposición la siguiente lista de documentos de la asignatura. Para los temas donde el rendimiento sea bajo, recomienda leer los documentos correspondientes utilizando ESTE FORMATO EXACTO: **Fuente:** [Nombre del Documento] **Enlace de descarga:** [URL].\n\nDatos de Rendimiento:\n%s\n\n%s",
+            targetAudience, audienceInstructions, performanceJsonData, docsContext
         );
 
         GenerateRequest requestBody = new GenerateRequest(

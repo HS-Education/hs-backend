@@ -5,6 +5,7 @@ import com.hs.hstesis.assessments.domain.model.commands.SubmitQuestionnaireComma
 
 public interface QuestionnaireCommandService {
     void handle(GenerateQuestionnaireCommand command);
+    void handle(com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command);
     void handle(SubmitQuestionnaireCommand command);
     Long handle(com.hs.hstesis.assessments.domain.model.commands.StartQuestionnaireCommand command);
 }

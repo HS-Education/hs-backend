@@ -54,6 +54,7 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
 
         var baseQuestionnaires = questionnaireRepository.findAll().stream()
                 .filter(q -> courseIds.contains(q.getCourseId()))
+                .filter(q -> q.getTargetStudentId() == null || q.getTargetStudentId().equals(studentId))
                 .collect(java.util.stream.Collectors.toList());
 
         var studentInstances = questionnaireInstanceRepository.findAllByStudentId(studentId);
@@ -118,5 +119,10 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
     @Override
     public java.util.Optional<com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission> handle(com.hs.hstesis.assessments.domain.model.queries.GetSubmissionByInstanceIdQuery query) {
         return submissionRepository.findByQuestionnaireInstanceIdAndStudentId(query.questionnaireInstanceId(), query.studentId());
+    }
+
+    @Override
+    public List<com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission> handle(com.hs.hstesis.assessments.domain.model.queries.GetAllQuestionnaireSubmissionsQuery query) {
+        return submissionRepository.findAll();
     }
 }

@@ -54,6 +54,36 @@ public class AchievementController {
         return ResponseEntity.ok(StudentAchievementResourceFromEntityAssembler.toResourceFromEntity(performanceOpt.get(), insightText));
     }
 
+    @Operation(summary = "Get student performance summary for a specific grading period")
+    @GetMapping("/students/{studentId}/courses/{courseId}/periods/{gradingPeriodId}/summary")
+    public ResponseEntity<com.hs.hstesis.achievements.interfaces.rest.resources.StudentPerformanceSummaryResource> getStudentPerformanceSummary(
+            @PathVariable Long studentId,
+            @PathVariable Long courseId,
+            @PathVariable Long gradingPeriodId) {
+        
+        var query = new com.hs.hstesis.achievements.domain.model.queries.GetStudentPerformanceSummaryQuery(studentId, courseId, gradingPeriodId);
+        var summaryOpt = achievementQueryService.handle(query);
+        
+        if (summaryOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var summary = summaryOpt.get();
+        var resource = new com.hs.hstesis.achievements.interfaces.rest.resources.StudentPerformanceSummaryResource(
+                summary.studentId(),
+                summary.gradingPeriodId(),
+                summary.bimesterAverage(),
+                summary.weeklyProgression().stream().map(w -> new com.hs.hstesis.achievements.interfaces.rest.resources.StudentPerformanceSummaryResource.WeeklyPerformanceResource(
+                        w.weekNumber(), w.averageScore(), w.needsRemedial()
+                )).toList(),
+                summary.definitiveGrades().stream().map(d -> new com.hs.hstesis.achievements.interfaces.rest.resources.StudentPerformanceSummaryResource.DefinitiveGradeResource(
+                        d.questionnaireId(), d.weekNumber(), d.score()
+                )).toList()
+        );
+
+        return ResponseEntity.ok(resource);
+    }
+
     @Operation(summary = "Generate and save a new AI insight for a student")
     @PostMapping("/students/{studentId}/insights")
     public ResponseEntity<?> generateStudentInsight(@PathVariable Long studentId) {
