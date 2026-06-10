@@ -102,7 +102,7 @@ public class UserCommandServiceImpl implements UserCommandService {
         String primaryRole = command.roles().get(0).toUpperCase();
         String prefix = "C"; // Default (but we will overwrite based on role)
         if (primaryRole.contains("ADMIN")) prefix = "A";
-        else if (primaryRole.contains("COORDINATOR")) prefix = "C";
+        else if (primaryRole.contains("COORDINATOR")) prefix = "P";
         else if (primaryRole.contains("TEACHER")) prefix = "P";
         else if (primaryRole.contains("STUDENT")) prefix = "E";
 
