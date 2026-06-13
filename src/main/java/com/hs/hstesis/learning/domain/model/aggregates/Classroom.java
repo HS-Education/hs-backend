@@ -5,6 +5,7 @@ import com.hs.hstesis.learning.domain.model.entities.AcademicYear;
 import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
 import com.hs.hstesis.learning.domain.model.valueobjects.ClassroomStatus;
 import jakarta.persistence.*;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -17,10 +18,12 @@ import lombok.Setter;
 )
 @Getter
 @Setter
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class Classroom {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @EqualsAndHashCode.Include
     private Long id;
 
     @ManyToOne(optional = false)

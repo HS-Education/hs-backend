@@ -85,7 +85,7 @@ public class AcademicYearController {
         return ResponseEntity.ok(resources);
     }
 
-    @PreAuthorize("hasRole('ADMIN') || hasRole('COORDINATOR')")
+    @PreAuthorize("hasRole('ADMIN') || hasRole('COORDINATOR') || hasRole('TEACHER') || hasRole('STUDENT')")
     @Operation(description = "Return grading periods of an academic year.")
     @GetMapping("/{academicYearId}/grading-periods")
     public ResponseEntity<List<GradingPeriodResource>> getGradingPeriods(@PathVariable Long academicYearId) {
