@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.hs.hstesis.assessments.application.internal.outboundservices.acl.ExternalLearningService;
+import com.hs.hstesis.assessments.application.internal.outboundservices.acl.ExternalNotificationService;
 import com.hs.hstesis.assessments.application.internal.outboundservices.acl.ExternalRepoService;
 import com.hs.hstesis.assessments.application.internal.outboundservices.ai.ExternalAiService;
 import com.hs.hstesis.assessments.domain.model.aggregates.Questionnaire;
@@ -29,6 +30,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     private final ExternalLearningService externalLearningService;
     private final ExternalRepoService externalRepoService;
     private final ExternalAiService externalAiService;
+    private final ExternalNotificationService externalNotificationService;
 
     public QuestionnaireCommandServiceImpl(QuestionnaireRepository questionnaireRepository,
                                            QuestionnaireInstanceRepository instanceRepository,
@@ -37,7 +39,8 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
                                            com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.QuestionnaireSubmissionRepository submissionRepository,
                                            ExternalLearningService externalLearningService,
                                            ExternalRepoService externalRepoService,
-                                           ExternalAiService externalAiService) {
+                                           ExternalAiService externalAiService,
+                                           ExternalNotificationService externalNotificationService) {
         this.questionnaireRepository = questionnaireRepository;
         this.instanceRepository = instanceRepository;
         this.questionRepository = questionRepository;
@@ -46,6 +49,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         this.externalLearningService = externalLearningService;
         this.externalRepoService = externalRepoService;
         this.externalAiService = externalAiService;
+        this.externalNotificationService = externalNotificationService;
     }
 
     @Override
@@ -90,6 +94,13 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             var question = new Question(baseInstance, topic.getId(), q.text(), q.options(), q.correctOptionIndex(), false);
             questionRepository.save(question);
         }
+
+        // Send notifications
+        var studentIds = externalLearningService.getStudentIdsByCourseId(command.courseId());
+        String msg = String.format("¡Atención! Tienes un nuevo cuestionario pendiente para la semana %d en tu curso.", command.weekNumber());
+        for (Long sId : studentIds) {
+            externalNotificationService.sendNotification(sId, msg);
+        }
     }
 
     @Override
@@ -123,6 +134,10 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             var question = new Question(baseInstance, command.topicId(), q.text(), q.options(), q.correctOptionIndex(), true);
             questionRepository.save(question);
         }
+
+        // Send notification
+        String msg = "¡Oportunidad de mejora! Se ha generado un nuevo cuestionario de repaso personalizado especialmente para ti.";
+        externalNotificationService.sendNotification(command.studentId(), msg);
     }
 
     @Override

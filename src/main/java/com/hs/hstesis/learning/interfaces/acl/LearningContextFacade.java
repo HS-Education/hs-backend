@@ -145,6 +145,15 @@ public class LearningContextFacade {
         return classroomQueryService.handle(new GetClassroomsByCourseIdQuery(courseId));
     }
 
+    public List<com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData> getStudentsByCourseId(Long courseId) {
+        if (courseId == null) return List.of();
+        var classrooms = getClassroomsByCourseId(courseId);
+        return classrooms.stream()
+                .flatMap(classroom -> getStudentsByClassroom(classroom.getId()).stream())
+                .distinct()
+                .toList();
+    }
+
     public Optional<Long> getCourseIdByClassroomId(Long classroomId) {
         if (classroomId == null) return Optional.empty();
         return classroomQueryService.handle(new GetClassroomByIdQuery(classroomId))

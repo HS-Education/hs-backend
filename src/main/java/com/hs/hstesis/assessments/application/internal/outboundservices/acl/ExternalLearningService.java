@@ -22,4 +22,11 @@ public class ExternalLearningService {
     public List<Long> getEnrolledCourseIds(Long studentId) {
         return learningContextFacade.getEnrolledCourseIds(studentId);
     }
+
+    public List<Long> getStudentIdsByCourseId(Long courseId) {
+        return learningContextFacade.getStudentsByCourseId(courseId)
+                .stream()
+                .map(com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData::userId)
+                .toList();
+    }
 }
