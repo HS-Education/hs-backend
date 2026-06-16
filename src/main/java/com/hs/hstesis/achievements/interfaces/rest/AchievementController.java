@@ -86,9 +86,11 @@ public class AchievementController {
 
     @Operation(summary = "Generate and save a new AI insight for a student")
     @PostMapping("/students/{studentId}/insights")
-    public ResponseEntity<?> generateStudentInsight(@PathVariable Long studentId) {
+    public ResponseEntity<?> generateStudentInsight(
+            @PathVariable Long studentId,
+            @RequestParam(defaultValue = "Estudiante") String studentName) {
         try {
-            var insight = achievementCommandService.handle(new GenerateStudentInsightCommand(studentId));
+            var insight = achievementCommandService.handle(new GenerateStudentInsightCommand(studentId, studentName));
             return ResponseEntity.ok(java.util.Map.of(
                     "message", "Insight generado correctamente",
                     "insightText", insight.getInsightText()

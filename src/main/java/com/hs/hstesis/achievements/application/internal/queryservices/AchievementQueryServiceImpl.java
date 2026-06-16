@@ -34,39 +34,71 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
         var submissions = externalAssessmentService.getSubmissionsByStudentId(query.studentId());
         
         if (submissions.isEmpty()) {
-            return Optional.empty();
+            return Optional.of(new StudentPerformance(query.studentId(), "Estudiante " + query.studentId(), 0.0, new ArrayList<>()));
         }
 
         List<TopicPerformance> topics = new ArrayList<>();
         double totalScore = 0;
+        java.util.Map<Long, java.util.List<com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireSubmissionDto>> submissionsByTopic = new java.util.HashMap<>();
+        java.util.Map<Long, TopicPerformance> baseTopicInfo = new java.util.HashMap<>();
 
         for (var sub : submissions) {
+            var questionnaireOpt = externalAssessmentService.getQuestionnaireById(sub.questionnaireId());
+            if (questionnaireOpt.isEmpty()) continue;
+            var questionnaire = questionnaireOpt.get();
+
             var topicOpt = learningContextFacade.getTopicByCourseAndGradingPeriodAndOrderIndex(
-                    // We don't have courseId and gradingPeriodId directly on submission, we need to fetch the questionnaire
-                    // But wait, the existing code didn't know this! I need to ask ExternalAssessmentService for the questionnaire
-                    1L, // placeholder courseId
-                    1L, // placeholder gradingPeriodId
-                    1 // placeholder weekNumber
+                    questionnaire.courseId(),
+                    questionnaire.gradingPeriodId(),
+                    questionnaire.weekNumber()
             );
 
-            String topicName = topicOpt.map(t -> t.getName()).orElse("Tema Desconocido");
-            
-            // Assumes max score is always 20
-            double maxScore = 20.0;
-            // Ensure score is valid percentage
-            double percentage = (sub.score() / maxScore) * 100.0;
-            
-            topics.add(new TopicPerformance(
-                    topicOpt.map(t -> t.getId()).orElse(0L),
-                    topicName,
-                    1, // placeholder weekNumber
-                    sub.score(),
-                    percentage
-            ));
-            totalScore += percentage;
+            long tId = topicOpt.map(t -> t.getId()).orElse(0L);
+            if (tId != 0) {
+                submissionsByTopic.computeIfAbsent(tId, k -> new ArrayList<>()).add(sub);
+                
+                if (!baseTopicInfo.containsKey(tId)) {
+                    String topicName = topicOpt.map(t -> t.getName()).orElse("Tema Desconocido");
+                    baseTopicInfo.put(tId, new TopicPerformance(
+                            tId, topicName, questionnaire.weekNumber(),
+                            0, 0.0, questionnaire.gradingPeriodId(), questionnaire.courseId(), new ArrayList<>()
+                    ));
+                }
+            }
         }
 
-        double averageScore = totalScore / submissions.size();
+        for (var entry : submissionsByTopic.entrySet()) {
+            long tId = entry.getKey();
+            java.util.List<com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireSubmissionDto> topicSubmissions = entry.getValue();
+            
+            // Sort by submittedAt
+            topicSubmissions.sort(java.util.Comparator.comparing(com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireSubmissionDto::submittedAt));
+            
+            java.util.List<Double> progressHistory = new ArrayList<>();
+            double maxPercentage = 0.0;
+            int maxScoreRaw = 0;
+            
+            for (var sub : topicSubmissions) {
+                double percentage = (sub.score() / 20.0) * 100.0;
+                progressHistory.add(percentage);
+                if (percentage > maxPercentage) {
+                    maxPercentage = percentage;
+                    maxScoreRaw = sub.score();
+                }
+            }
+            
+            var base = baseTopicInfo.get(tId);
+            topics.add(new TopicPerformance(
+                    base.topicId(), base.topicName(), base.weekNumber(),
+                    maxScoreRaw, maxPercentage, base.gradingPeriodId(), base.courseId(), progressHistory
+            ));
+        }
+
+        for (TopicPerformance t : topics) {
+            totalScore += t.percentage();
+        }
+
+        double averageScore = topics.isEmpty() ? 0 : totalScore / topics.size();
         
         return Optional.of(new StudentPerformance(query.studentId(), "Estudiante " + query.studentId(), averageScore, topics));
     }
@@ -75,8 +107,11 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
     public Optional<com.hs.hstesis.achievements.domain.model.valueobjects.StudentPerformanceSummary> handle(com.hs.hstesis.achievements.domain.model.queries.GetStudentPerformanceSummaryQuery query) {
         var questionnaires = externalAssessmentService.getQuestionnairesByCourseAndPeriod(query.courseId(), query.gradingPeriodId());
         
+        var allSubmissions = externalAssessmentService.getSubmissionsByStudentId(query.studentId());
+
         var validQuestionnaires = questionnaires.stream()
-                .filter(q -> q.status().equals("PUBLISHED") || q.status().equals("CLOSED"))
+                .filter(q -> q.status().equals("PUBLISHED") || q.status().equals("CLOSED") || 
+                             allSubmissions.stream().anyMatch(s -> s.questionnaireId().equals(q.questionnaireId())))
                 .toList();
 
         if (validQuestionnaires.isEmpty()) {
@@ -84,8 +119,6 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
                     query.studentId(), query.gradingPeriodId(), 0.0, List.of(), List.of()
             ));
         }
-
-        var allSubmissions = externalAssessmentService.getSubmissionsByStudentId(query.studentId());
         
         List<com.hs.hstesis.achievements.domain.model.valueobjects.StudentPerformanceSummary.DefinitiveGrade> definitiveGrades = new ArrayList<>();
         java.util.Map<Integer, List<Integer>> weeklyScores = new java.util.HashMap<>();
@@ -98,25 +131,28 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
                     .filter(s -> s.questionnaireId().equals(q.questionnaireId()))
                     .max(java.util.Comparator.comparing(s -> s.submittedAt()));
             
-            // Assume score is out of 20, but the user just wants simple average. We keep the raw score.
-            int definitiveScore = latestSubmission.map(s -> s.score()).orElse(0);
+            // Maintain raw score for definitive grades as requested by user
+            int rawScore = latestSubmission.map(s -> s.score()).orElse(0);
 
             definitiveGrades.add(new com.hs.hstesis.achievements.domain.model.valueobjects.StudentPerformanceSummary.DefinitiveGrade(
-                    q.questionnaireId(), q.weekNumber(), definitiveScore
+                    q.questionnaireId(), q.weekNumber(), rawScore
             ));
 
-            totalScore += definitiveScore;
+            // totalScore and weeklyScores should use percentage to compute average properly
+            double percentage = (rawScore / 20.0) * 100.0;
+            int percentageInt = (int) Math.round(percentage);
 
-            weeklyScores.computeIfAbsent(q.weekNumber(), k -> new ArrayList<>()).add(definitiveScore);
+            totalScore += percentageInt;
+            weeklyScores.computeIfAbsent(q.weekNumber(), k -> new ArrayList<>()).add(percentageInt);
         }
 
-        double bimesterAverage = totalScore / validQuestionnaires.size();
+        double bimesterAverage = validQuestionnaires.isEmpty() ? 0 : totalScore / validQuestionnaires.size();
 
         List<com.hs.hstesis.achievements.domain.model.valueobjects.StudentPerformanceSummary.WeeklyPerformance> weeklyProgression = new ArrayList<>();
         for (var entry : weeklyScores.entrySet()) {
             double weekAverage = entry.getValue().stream().mapToInt(Integer::intValue).average().orElse(0.0);
             weeklyProgression.add(new com.hs.hstesis.achievements.domain.model.valueobjects.StudentPerformanceSummary.WeeklyPerformance(
-                    entry.getKey(), weekAverage, weekAverage <= 13.0
+                    entry.getKey(), weekAverage, weekAverage < 50.0
             ));
         }
         

@@ -23,4 +23,8 @@ public class Notification extends AuditableAbstractAggregateRoot<Notification> {
         this.message = message;
         this.isRead = false;
     }
+
+    public void markAsRead() {
+        this.isRead = true;
+    }
 }

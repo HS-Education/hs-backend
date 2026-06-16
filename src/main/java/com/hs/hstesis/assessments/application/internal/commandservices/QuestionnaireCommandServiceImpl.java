@@ -55,12 +55,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     @Override
     @Transactional
     public void handle(GenerateQuestionnaireCommand command) {
-        var existing = questionnaireRepository.findByCourseIdAndGradingPeriodIdAndWeekNumber(
-                command.courseId(), command.gradingPeriodId(), command.weekNumber());
-
-        if (existing.isPresent()) {
-            throw new IllegalStateException("A questionnaire already exists for this week.");
-        }
+        // Permitir múltiples cuestionarios para la misma semana a petición del usuario.
 
         var topic = externalLearningService.getTopicByCourseAndGradingPeriodAndOrderIndex(command.courseId(), command.gradingPeriodId(), command.weekNumber())
                 .orElseThrow(() -> new IllegalArgumentException("No topic found for the specified week number."));
@@ -113,15 +108,16 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
 
         String contextText = String.join("\n\n", chunks);
 
-        // Generate 10 questions for remedial
-        var aiResponse = externalAiService.generateQuiz(contextText, "Remedial Topic " + command.topicId(), 10, true);
+        // Generate requested number of questions for remedial
+        int numQuestions = command.numQuestions() != null ? command.numQuestions() : 10;
+        var aiResponse = externalAiService.generateQuiz(contextText, "Remedial Topic " + command.topicId(), numQuestions, true);
 
         var questionnaire = new Questionnaire(
                 command.courseId(), 
                 command.gradingPeriodId(), 
                 command.weekNumber(), 
                 1, // 1 attempt
-                10, // 10 questions
+                numQuestions, // requested questions
                 command.studentId(), 
                 com.hs.hstesis.assessments.domain.model.valueobjects.QuestionnaireType.REMEDIAL
         );

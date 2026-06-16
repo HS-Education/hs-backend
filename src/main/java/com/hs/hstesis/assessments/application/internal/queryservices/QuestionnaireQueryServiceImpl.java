@@ -89,8 +89,8 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
                 if (completedAttempts >= baseQ.getAllowedAttempts()) {
                     status = "COMPLETED";
                 } else {
-                    // Can still start another attempt, but we can call it PENDING or leave it PENDING so they can start
-                    status = "PENDING"; 
+                    // Can still start another attempt, but we can call it RETRY so it's not confused with the first pending attempt
+                    status = "RETRY"; 
                 }
             }
             
@@ -110,6 +110,7 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
                     attemptsLeft,
                     baseQ.getAllowedAttempts(),
                     baseQ.getQuestionsPerAttempt(),
+                    baseQ.getType().name(),
                     pastAttempts,
                     baseQ.getCreatedAt() != null ? baseQ.getCreatedAt().toString() : ""
             );

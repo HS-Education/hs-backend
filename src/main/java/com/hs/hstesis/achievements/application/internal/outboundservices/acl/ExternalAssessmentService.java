@@ -23,4 +23,8 @@ public class ExternalAssessmentService {
     public List<QuestionnaireDto> getQuestionnairesByCourseAndPeriod(Long courseId, Long gradingPeriodId) {
         return assessmentsContextFacade.getQuestionnairesByCourseAndPeriod(courseId, gradingPeriodId);
     }
+
+    public java.util.Optional<QuestionnaireDto> getQuestionnaireById(Long questionnaireId) {
+        return assessmentsContextFacade.getQuestionnaireById(questionnaireId);
+    }
 }

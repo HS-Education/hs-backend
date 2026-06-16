@@ -12,6 +12,7 @@ public record AvailableQuestionnaireResource(
         Integer attemptsLeft,
         Integer maxAttempts,
         Integer questionsPerAttempt,
+        String type,
         List<QuestionnaireAttemptResource> pastAttempts,
         String createdAt
 ) {

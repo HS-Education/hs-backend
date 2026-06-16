@@ -5,5 +5,6 @@ public record GenerateRemedialQuestionnaireCommand(
         Long courseId,
         Long gradingPeriodId,
         Integer weekNumber,
-        Long topicId
+        Long topicId,
+        Integer numQuestions
 ) {}

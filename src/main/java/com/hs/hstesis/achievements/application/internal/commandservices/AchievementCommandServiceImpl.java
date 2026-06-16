@@ -68,7 +68,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
             List<Long> courseIds = externalLearningService.getEnrolledCourseIds(command.studentId());
             String docsContext = buildDocumentsContext(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "estudiante", docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "estudiante", command.studentName(), docsContext);
             
             var insight = new AchievementInsight("STUDENT", command.studentId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -91,7 +91,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
                     .map(List::of).orElse(List.of());
             String docsContext = buildDocumentsContext(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "profesor", docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "profesor", "", docsContext);
             
             var insight = new AchievementInsight("CLASSROOM", command.classroomId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -113,7 +113,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
             List<Long> courseIds = externalLearningService.getCoursesByAreaId(command.areaId());
             String docsContext = buildDocumentsContext(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico", docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico", "", docsContext);
             
             var insight = new AchievementInsight("AREA", command.areaId(), insightText);
             return achievementInsightRepository.save(insight);

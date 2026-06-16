@@ -40,4 +40,15 @@ public class AssessmentsContextFacade {
                 ))
                 .collect(java.util.stream.Collectors.toList());
     }
+
+    public java.util.Optional<com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireDto> getQuestionnaireById(Long questionnaireId) {
+        return questionnaireRepository.findById(questionnaireId)
+                .map(q -> new com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireDto(
+                        q.getId(),
+                        q.getCourseId(),
+                        q.getGradingPeriodId(),
+                        q.getWeekNumber(),
+                        q.getStatus().name()
+                ));
+    }
 }

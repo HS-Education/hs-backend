@@ -5,5 +5,8 @@ public record TopicPerformance(
         String topicName,
         Integer weekNumber,
         Integer score,
-        Double percentage
+        Double percentage,
+        Long gradingPeriodId,
+        Long courseId,
+        java.util.List<Double> progressHistory
 ) {}

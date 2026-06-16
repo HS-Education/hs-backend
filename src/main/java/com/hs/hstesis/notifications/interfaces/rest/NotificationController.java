@@ -19,9 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class NotificationController {
 
     private final NotificationQueryService notificationQueryService;
+    private final com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService;
 
-    public NotificationController(NotificationQueryService notificationQueryService) {
+    public NotificationController(NotificationQueryService notificationQueryService, com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService) {
         this.notificationQueryService = notificationQueryService;
+        this.notificationCommandService = notificationCommandService;
     }
 
     @Operation(description = "Get unread notifications for the authenticated user")
@@ -41,5 +43,24 @@ public class NotificationController {
                 .toList();
         
         return ResponseEntity.ok(notificationResources);
+    }
+
+    @Operation(description = "Mark a notification as read")
+    @org.springframework.web.bind.annotation.PostMapping("/{id}/read")
+    public ResponseEntity<?> markAsRead(@org.springframework.web.bind.annotation.PathVariable Long id) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            return ResponseEntity.status(401).body(java.util.Map.of("message", "Unauthorized"));
+        }
+
+        var userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        var command = new com.hs.hstesis.notifications.domain.model.commands.MarkNotificationAsReadCommand(id, userDetails.getId());
+        
+        try {
+            notificationCommandService.handle(command);
+            return ResponseEntity.ok(java.util.Map.of("message", "Notification marked as read"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(400).body(java.util.Map.of("message", e.getMessage()));
+        }
     }
 }

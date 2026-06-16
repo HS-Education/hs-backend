@@ -1,3 +1,3 @@
 package com.hs.hstesis.achievements.domain.model.commands;
 
-public record GenerateStudentInsightCommand(Long studentId) {}
+public record GenerateStudentInsightCommand(Long studentId, String studentName) {}

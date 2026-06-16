@@ -24,7 +24,7 @@ public class ExternalAiService {
         this.restTemplate = restTemplate;
     }
 
-    public String generateInsight(String performanceJsonData, String targetAudience, String docsContext) {
+    public String generateInsight(String performanceJsonData, String targetAudience, String targetName, String docsContext) {
         String url = aiServiceUrl + "/generate";
 
         HttpHeaders headers = new HttpHeaders();
@@ -35,7 +35,7 @@ public class ExternalAiService {
 
         String audienceInstructions = "";
         if ("estudiante".equals(targetAudience)) {
-            audienceInstructions = "Si el estudiante tiene calificaciones bajas (menores o iguales a 13 o 60%), debes darle recomendaciones globales directas: dile qué temas exactos debe estudiar, qué conceptos debe repasar y dale sugerencias prácticas de mejora que él podría aplicar. Por el contrario, si el estudiante tiene calificaciones altas (mayores o iguales a 16 u 80%), dale recomendaciones muy positivas, motívalo a seguir así y explícitamente NO recomiendes cuestionarios de repaso para estos casos sobresalientes.";
+            audienceInstructions = "Dirígete explícitamente al estudiante por su nombre (" + targetName + "). Por ejemplo: 'Hola " + targetName + ", ...'. Si el estudiante tiene calificaciones bajas (menores o iguales a 13 o 60%), debes darle recomendaciones globales directas: dile qué temas exactos debe estudiar, qué conceptos debe repasar y dale sugerencias prácticas de mejora que él podría aplicar. Por el contrario, si el estudiante tiene calificaciones altas (mayores o iguales a 16 u 80%), dale recomendaciones muy positivas, motívalo a seguir así y explícitamente NO recomiendes cuestionarios de repaso para estos casos sobresalientes.";
         } else if ("profesor".equals(targetAudience)) {
             audienceInstructions = "Si hay alumnos con bajas calificaciones (menores o iguales a 13 o 60%), sugiere qué temas deben reforzar y RECUÉRDALE AL PROFESOR explícitamente que tiene la opción en el sistema de generar un 'Cuestionario de Repaso' personalizado para esos alumnos en esos temas. Sin embargo, para los alumnos con notas altas (mayores o iguales a 16 u 80%), dale recomendaciones positivas al profesor y aclara que a ellos NO se les debe generar cuestionarios de repaso.";
         } else if ("coordinador académico".equals(targetAudience)) {
@@ -43,11 +43,11 @@ public class ExternalAiService {
         }
 
         String prompt = String.format(
-            "Eres un analista académico experto (Sery). A continuación te proveo los datos de rendimiento en formato JSON. " +
+            "Eres un analista académico experto llamado Sery. A continuación te proveo los datos de rendimiento en formato JSON. " +
             "Genera un insight analítico breve y útil (máximo 3 párrafos) dirigido a un %s. " +
             "Destaca los puntos fuertes y los temas donde se necesita refuerzo.\n" +
             "INSTRUCCIONES ESPECÍFICAS SEGÚN TU AUDIENCIA:\n%s\n\n" +
-            "Además, tienes a tu disposición la siguiente lista de documentos de la asignatura. Para los temas donde el rendimiento sea bajo, recomienda leer los documentos correspondientes utilizando ESTE FORMATO EXACTO: **Fuente:** [Nombre del Documento] **Enlace de descarga:** [URL].\n\nDatos de Rendimiento:\n%s\n\n%s",
+            "Además, tienes a tu disposición la siguiente lista de material de apoyo de la asignatura. PARA TODOS LOS TEMAS donde el rendimiento sea bajo, DEBES OBLIGATORIAMENTE adjuntar al menos un material de apoyo relacionado para que el usuario pueda repasarlo. Relaciona el material guiándote por la similitud entre el nombre del tema y el título del documento, o recomienda documentos generales si aplican. Utiliza ESTE FORMATO EXACTO al finalizar la recomendación: **Fuente:** [Nombre del Documento] **Enlace de descarga:** [URL]. IMPORTANTE: NO cites ni menciones 'Contexto 1' ni 'Contexto 2' como fuentes.\n\nDatos de Rendimiento:\n%s\n\n%s",
             targetAudience, audienceInstructions, performanceJsonData, docsContext
         );
 
