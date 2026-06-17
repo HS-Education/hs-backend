@@ -136,4 +136,44 @@ public class ChatController {
         
         return ResponseEntity.ok(resource);
     }
+
+    @PreAuthorize("hasAuthority('REPOSITORY_READ')")
+    @Operation(summary = "Send a message and receive response as a stream")
+    @PostMapping(value = "/{sessionId}/stream")
+    public void sendMessageStream(
+            @PathVariable Long sessionId,
+            @RequestBody @Valid ChatRequestResource request,
+            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+            
+        var userId = iamContextFacade.getAuthenticatedUserId();
+        
+        response.setContentType("text/plain; charset=UTF-8");
+        response.setBufferSize(1);
+        response.setHeader("X-Accel-Buffering", "no");
+        response.setHeader("Cache-Control", "no-cache");
+        
+        var outputStream = response.getOutputStream();
+        
+        chatService.streamMessageResponse(sessionId, userId, request.question(),
+            token -> {
+                try {
+                    outputStream.write(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    outputStream.flush();
+                } catch (java.io.IOException e) {
+                    throw new RuntimeException(e);
+                }
+            },
+            () -> {
+                try {
+                    outputStream.flush();
+                } catch (java.io.IOException ignored) {}
+            },
+            error -> {
+                error.printStackTrace();
+                try {
+                    outputStream.flush();
+                } catch (java.io.IOException ignored) {}
+            }
+        );
+    }
 }

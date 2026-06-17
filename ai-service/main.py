@@ -119,7 +119,10 @@ def process_document(ch, method, properties, body: bytes) -> None:
     logger.info("Processing documentId=%s objectKey=%s", document_id, object_key)
 
     try:
+        t0_total = time.time()
+        
         logger.info("-> Downloading document from MinIO...")
+        t0_download = time.time()
         response = minio_client.get_object(
             bucket_name=settings.minio_bucket_name,
             object_name=object_key,
@@ -127,8 +130,11 @@ def process_document(ch, method, properties, body: bytes) -> None:
         pdf_bytes = response.read()
         response.close()
         response.release_conn()
+        t1_download = time.time()
+        logger.info("[TIMER] Downloaded from MinIO in %.3f seconds", t1_download - t0_download)
 
         logger.info("-> Extracting text and chunking...")
+        t0_extract = time.time()
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
         chunks_metadata: list[dict[str, Any]] = []
@@ -160,12 +166,17 @@ def process_document(ch, method, properties, body: bytes) -> None:
                 start += (CHUNK_SIZE - OVERLAP)
 
         doc.close()
+        t1_extract = time.time()
+        logger.info("[TIMER] PyMuPDF Extraction & Chunking (%d chunks) in %.3f seconds", len(texts_to_encode), t1_extract - t0_extract)
 
         if texts_to_encode:
             logger.info("-> Generating embeddings for %d chunks...", len(texts_to_encode))
+            t0_embed = time.time()
             embeddings = model.encode(texts_to_encode).tolist()
             for i, metadata in enumerate(chunks_metadata):
                 metadata["embedding"] = embeddings[i]
+            t1_embed = time.time()
+            logger.info("[TIMER] Jina Embeddings generated in %.3f seconds", t1_embed - t0_embed)
         else:
             logger.info("No valid text chunks found; sending empty chunk list")
 
@@ -182,7 +193,8 @@ def process_document(ch, method, properties, body: bytes) -> None:
         )
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
-        logger.info("Document %s processed successfully", document_id)
+        t1_total = time.time()
+        logger.info("Document %s processed successfully! [TOTAL TIME: %.3f seconds]", document_id, t1_total - t0_total)
 
     except Exception:
         logger.exception("Failed processing document %s", document_id)
@@ -201,8 +213,8 @@ def start_rabbitmq_consumer() -> None:
                 port=settings.rabbitmq_port,
                 virtual_host="/",
                 credentials=credentials,
-                heartbeat=30,
-                blocked_connection_timeout=120,
+                heartbeat=1800,
+                blocked_connection_timeout=1800,
             )
 
             connection = pika.BlockingConnection(parameters)

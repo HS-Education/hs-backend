@@ -116,6 +116,65 @@ public class ChatServiceImpl implements ChatService {
         return chatMessageRepository.save(msg);
     }
 
+    @Override
+    public void streamMessageResponse(Long sessionId, Long userId, String question,
+                                      java.util.function.Consumer<String> onToken, Runnable onComplete, java.util.function.Consumer<Throwable> onError) {
+        var session = chatSessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Session not found"));
+
+        if (!session.getUserId().equals(userId)) {
+            throw new AuthorizationDeniedException("Not your session");
+        }
+
+        var userMsg = new ChatMessage(session, "user", question);
+        chatMessageRepository.save(userMsg);
+
+        List<Long> courseIdsToSearch;
+        if (session.getCourseId() != null && session.getCourseId() != 0L) {
+            courseIdsToSearch = List.of(session.getCourseId());
+        } else {
+            courseIdsToSearch = new java.util.ArrayList<>(externalLearningService.getEnrolledCourseIds(userId));
+        }
+
+        var embedResponse = aiServiceClient.embedQuery(question);
+        var vectorString = formatVectorForPg(embedResponse.embedding());
+
+        List<String> contextTexts = List.of();
+        if (!courseIdsToSearch.isEmpty()) {
+            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString, 10);
+            contextTexts = chunksWithMeta.stream()
+                .map(c -> String.format("Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s", 
+                     c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
+                .toList();
+        }
+
+        var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
+        var messagesForAi = history.stream()
+                .map(msg -> new AiMessageDto(msg.getRole(), msg.getContent()))
+                .toList();
+
+        var req = new GenerateRequest(messagesForAi, contextTexts, 512, 0.2f, true);
+        StringBuilder fullAnswer = new StringBuilder();
+
+        aiServiceClient.generateAnswerStream(req, 
+            token -> {
+                fullAnswer.append(token);
+                onToken.accept(token);
+            },
+            () -> {
+                try {
+                    var currentSession = chatSessionRepository.findById(sessionId).orElseThrow();
+                    var msg = new ChatMessage(currentSession, "assistant", fullAnswer.toString());
+                    chatMessageRepository.save(msg);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                onComplete.run();
+            },
+            onError
+        );
+    }
+
     @Transactional
     public void saveAssistantMessage(ChatSession session, String text) {
         var msg = new ChatMessage(session, "assistant", text);
