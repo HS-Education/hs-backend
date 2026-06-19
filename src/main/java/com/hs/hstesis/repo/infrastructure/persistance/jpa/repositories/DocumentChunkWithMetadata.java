@@ -5,4 +5,5 @@ public interface DocumentChunkWithMetadata {
     String getTitle();
     Long getDocumentId();
     Long getCourseId();
+    Double getSimilarity();
 }

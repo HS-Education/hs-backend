@@ -142,6 +142,13 @@ public class ChatServiceImpl implements ChatService {
         List<String> contextTexts = List.of();
         if (!courseIdsToSearch.isEmpty()) {
             var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString, 10);
+            
+            System.out.println("\n--- [START RETRIEVAL SCORES] ---");
+            for (var c : chunksWithMeta) {
+                System.out.printf("[SIMILARITY] Score: %.4f | Document: %s%n", c.getSimilarity(), c.getTitle());
+            }
+            System.out.println("--- [END RETRIEVAL SCORES] ---\n");
+
             contextTexts = chunksWithMeta.stream()
                 .map(c -> String.format("Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s", 
                      c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))

@@ -25,7 +25,8 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
                                              @Param("limit") int limit);
 
     @Query(value = """
-            SELECT c.content as content, d.title as title, d.id as documentId, t.course_id as courseId
+            SELECT c.content as content, d.title as title, d.id as documentId, t.course_id as courseId, 
+                   (1 - (c.embedding <=> cast(:vector as vector))) as similarity
             FROM document_chunks c
             JOIN documents d ON c.document_id = d.id
             JOIN document_targets t ON d.id = t.document_id
