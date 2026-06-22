@@ -86,7 +86,13 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         instanceRepository.save(baseInstance);
 
         for (var q : aiResponse.questions()) {
-            var question = new Question(baseInstance, topic.getId(), q.text(), q.options(), q.correctOptionIndex(), false);
+            var originalOptions = q.options();
+            var originalCorrectOption = originalOptions.get(q.correctOptionIndex());
+            var shuffledOptions = new java.util.ArrayList<>(originalOptions);
+            java.util.Collections.shuffle(shuffledOptions);
+            var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
+
+            var question = new Question(baseInstance, topic.getId(), q.text(), shuffledOptions, newCorrectIndex, false);
             questionRepository.save(question);
         }
 
@@ -127,7 +133,13 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         instanceRepository.save(baseInstance);
 
         for (var q : aiResponse.questions()) {
-            var question = new Question(baseInstance, command.topicId(), q.text(), q.options(), q.correctOptionIndex(), true);
+            var originalOptions = q.options();
+            var originalCorrectOption = originalOptions.get(q.correctOptionIndex());
+            var shuffledOptions = new java.util.ArrayList<>(originalOptions);
+            java.util.Collections.shuffle(shuffledOptions);
+            var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
+
+            var question = new Question(baseInstance, command.topicId(), q.text(), shuffledOptions, newCorrectIndex, true);
             questionRepository.save(question);
         }
 
@@ -146,7 +158,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             throw new IllegalArgumentException("Cannot submit base template questionnaire.");
         }
 
-        var existingSubmission = submissionRepository.findByQuestionnaireInstanceIdAndStudentId(instance.getId(), instance.getStudentId());
+        var existingSubmission = submissionRepository.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(instance.getId(), instance.getStudentId());
         if (existingSubmission.isPresent()) {
             throw new IllegalArgumentException("Questionnaire instance is already submitted.");
         }
@@ -236,7 +248,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         
         // Check if there is already an unfinished (STARTED) instance
         var unfinished = existingInstances.stream()
-                .filter(i -> submissionRepository.findByQuestionnaireInstanceIdAndStudentId(i.getId(), command.studentId()).isEmpty())
+                .filter(i -> submissionRepository.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(i.getId(), command.studentId()).isEmpty())
                 .findFirst();
                 
         if (unfinished.isPresent()) {
@@ -261,7 +273,13 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
                 .collect(java.util.stream.Collectors.toList());
 
         for (var baseQ : selectedQuestions) {
-            var clone = new Question(studentInstance, baseQ.getTopicId(), baseQ.getText(), baseQ.getOptions(), baseQ.getCorrectOptionIndex(), false);
+            var originalOptions = baseQ.getOptions();
+            var originalCorrectOption = originalOptions.get(baseQ.getCorrectOptionIndex());
+            var shuffledOptions = new java.util.ArrayList<>(originalOptions);
+            java.util.Collections.shuffle(shuffledOptions);
+            var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
+
+            var clone = new Question(studentInstance, baseQ.getTopicId(), baseQ.getText(), shuffledOptions, newCorrectIndex, false);
             questionRepository.save(clone);
         }
 
@@ -274,11 +292,22 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             var weakTopicChunks = externalRepoService.getDocumentChunksByTopicIds(List.of(rem.getWeakTopicId()));
             if (!weakTopicChunks.isEmpty()) {
                 String weakContext = String.join("\n\n", weakTopicChunks);
-                var remResponse = externalAiService.generateQuiz(weakContext, "Remedial Topic", 2, true);
-                
-                for (var rq : remResponse.questions()) {
-                    var rQuestion = new Question(studentInstance, rem.getWeakTopicId(), rq.text(), rq.options(), rq.correctOptionIndex(), true);
-                    questionRepository.save(rQuestion);
+                try {
+                    var remResponse = externalAiService.generateQuiz(weakContext, "Remedial Topic", 2, true);
+                    
+                    for (var rq : remResponse.questions()) {
+                        var originalOptions = rq.options();
+                        var originalCorrectOption = originalOptions.get(rq.correctOptionIndex());
+                        var shuffledOptions = new java.util.ArrayList<>(originalOptions);
+                        java.util.Collections.shuffle(shuffledOptions);
+                        var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
+
+                        var rQuestion = new Question(studentInstance, rem.getWeakTopicId(), rq.text(), shuffledOptions, newCorrectIndex, true);
+                        questionRepository.save(rQuestion);
+                    }
+                } catch (Exception e) {
+                    // Log the error but don't fail the entire start process
+                    System.err.println("Failed to generate remedial questions for topic " + rem.getWeakTopicId() + ": " + e.getMessage());
                 }
             }
         }

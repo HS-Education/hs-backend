@@ -25,10 +25,12 @@ public class ChatController {
 
     private final ChatService chatService;
     private final IamContextFacade iamContextFacade;
+    private final com.hs.hstesis.assessments.interfaces.acl.AssessmentsContextFacade assessmentsContextFacade;
 
-    public ChatController(ChatService chatService, IamContextFacade iamContextFacade) {
+    public ChatController(ChatService chatService, IamContextFacade iamContextFacade, com.hs.hstesis.assessments.interfaces.acl.AssessmentsContextFacade assessmentsContextFacade) {
         this.chatService = chatService;
         this.iamContextFacade = iamContextFacade;
+        this.assessmentsContextFacade = assessmentsContextFacade;
     }
 
     @PreAuthorize("hasAuthority('REPOSITORY_READ')")
@@ -131,6 +133,10 @@ public class ChatController {
             
         var userId = iamContextFacade.getAuthenticatedUserId();
         
+        if (assessmentsContextFacade.hasActiveQuiz(userId)) {
+            throw new IllegalStateException("Sery está desactivado porque tienes un cuestionario en curso. Debes finalizarlo antes de usar el chat.");
+        }
+        
         var message = chatService.sendMessage(sessionId, userId, request.question());
         var resource = new ChatMessageResource(message.getId(), message.getRole(), message.getContent(), message.getCreatedAt());
         
@@ -146,6 +152,12 @@ public class ChatController {
             jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
             
         var userId = iamContextFacade.getAuthenticatedUserId();
+        
+        if (assessmentsContextFacade.hasActiveQuiz(userId)) {
+            response.setStatus(HttpStatus.FORBIDDEN.value());
+            response.getWriter().write("Sery está desactivado porque tienes un cuestionario en curso. Debes finalizarlo antes de usar el chat.");
+            return;
+        }
         
         response.setContentType("text/plain; charset=UTF-8");
         response.setBufferSize(1);

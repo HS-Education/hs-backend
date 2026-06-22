@@ -70,7 +70,7 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
             java.util.List<com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireAttemptResource> pastAttempts = new java.util.ArrayList<>();
             
             for (var instance : allInstances) {
-                var submission = submissionRepository.findByQuestionnaireInstanceIdAndStudentId(instance.getId(), studentId);
+                var submission = submissionRepository.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(instance.getId(), studentId);
                 if (submission.isPresent()) {
                     completedAttempts++;
                     pastAttempts.add(new com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireAttemptResource(
@@ -118,8 +118,16 @@ public class QuestionnaireQueryServiceImpl implements QuestionnaireQueryService 
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public java.util.Optional<com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission> handle(com.hs.hstesis.assessments.domain.model.queries.GetSubmissionByInstanceIdQuery query) {
-        return submissionRepository.findByQuestionnaireInstanceIdAndStudentId(query.questionnaireInstanceId(), query.studentId());
+        var opt = submissionRepository.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(query.questionnaireInstanceId(), query.studentId());
+        opt.ifPresent(sub -> {
+            sub.getAnswers().size(); // Trigger lazy initialization
+            for (var ans : sub.getAnswers()) {
+                ans.getQuestion().getOptions().size(); // Trigger lazy initialization of question options if needed
+            }
+        });
+        return opt;
     }
 
     @Override

@@ -9,8 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface QuestionnaireSubmissionRepository extends JpaRepository<QuestionnaireSubmission, Long> {
-    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"answers", "answers.question"})
-    Optional<QuestionnaireSubmission> findByQuestionnaireInstanceIdAndStudentId(Long questionnaireInstanceId, Long studentId);
+    Optional<QuestionnaireSubmission> findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(Long questionnaireInstanceId, Long studentId);
 
     List<QuestionnaireSubmission> findByStudentId(Long studentId);
 }
