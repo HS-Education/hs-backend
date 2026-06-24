@@ -131,7 +131,6 @@ def process_document(ch, method, properties, body: bytes) -> None:
         response.close()
         response.release_conn()
         t1_download = time.time()
-        logger.info("[TIMER] Downloaded from MinIO in %.3f seconds", t1_download - t0_download)
 
         logger.info("-> Extracting text and chunking...")
         t0_extract = time.time()
@@ -167,7 +166,6 @@ def process_document(ch, method, properties, body: bytes) -> None:
 
         doc.close()
         t1_extract = time.time()
-        logger.info("[TIMER] PyMuPDF Extraction & Chunking (%d chunks) in %.3f seconds", len(texts_to_encode), t1_extract - t0_extract)
 
         if texts_to_encode:
             logger.info("-> Generating embeddings for %d chunks...", len(texts_to_encode))
@@ -176,7 +174,6 @@ def process_document(ch, method, properties, body: bytes) -> None:
             for i, metadata in enumerate(chunks_metadata):
                 metadata["embedding"] = embeddings[i]
             t1_embed = time.time()
-            logger.info("[TIMER] Jina Embeddings generated in %.3f seconds", t1_embed - t0_embed)
         else:
             logger.info("No valid text chunks found; sending empty chunk list")
 

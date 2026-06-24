@@ -27,10 +27,10 @@ public class ChatServiceImpl implements ChatService {
     private final ExternalLearningService externalLearningService;
 
     public ChatServiceImpl(ChatSessionRepository chatSessionRepository,
-                           ChatMessageRepository chatMessageRepository,
-                           DocumentChunkRepository documentChunkRepository,
-                           AiServiceClient aiServiceClient,
-                           ExternalLearningService externalLearningService) {
+            ChatMessageRepository chatMessageRepository,
+            DocumentChunkRepository documentChunkRepository,
+            AiServiceClient aiServiceClient,
+            ExternalLearningService externalLearningService) {
         this.chatSessionRepository = chatSessionRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.documentChunkRepository = documentChunkRepository;
@@ -96,11 +96,13 @@ public class ChatServiceImpl implements ChatService {
 
         List<String> contextTexts = List.of();
         if (!courseIdsToSearch.isEmpty()) {
-            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString, 10);
+            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString,
+                    10);
             contextTexts = chunksWithMeta.stream()
-                .map(c -> String.format("Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s", 
-                     c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
-                .toList();
+                    .map(c -> String.format(
+                            "Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s",
+                            c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
+                    .toList();
         }
 
         var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
@@ -118,7 +120,8 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public void streamMessageResponse(Long sessionId, Long userId, String question,
-                                      java.util.function.Consumer<String> onToken, Runnable onComplete, java.util.function.Consumer<Throwable> onError) {
+            java.util.function.Consumer<String> onToken, Runnable onComplete,
+            java.util.function.Consumer<Throwable> onError) {
         var session = chatSessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Session not found"));
 
@@ -141,18 +144,14 @@ public class ChatServiceImpl implements ChatService {
 
         List<String> contextTexts = List.of();
         if (!courseIdsToSearch.isEmpty()) {
-            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString, 10);
-            
-            System.out.println("\n--- [START RETRIEVAL SCORES] ---");
-            for (var c : chunksWithMeta) {
-                System.out.printf("[SIMILARITY] Score: %.4f | Document: %s%n", c.getSimilarity(), c.getTitle());
-            }
-            System.out.println("--- [END RETRIEVAL SCORES] ---\n");
+            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString,
+                    10);
 
             contextTexts = chunksWithMeta.stream()
-                .map(c -> String.format("Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s", 
-                     c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
-                .toList();
+                    .map(c -> String.format(
+                            "Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s",
+                            c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
+                    .toList();
         }
 
         var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
@@ -163,23 +162,22 @@ public class ChatServiceImpl implements ChatService {
         var req = new GenerateRequest(messagesForAi, contextTexts, 512, 0.2f, true);
         StringBuilder fullAnswer = new StringBuilder();
 
-        aiServiceClient.generateAnswerStream(req, 
-            token -> {
-                fullAnswer.append(token);
-                onToken.accept(token);
-            },
-            () -> {
-                try {
-                    var currentSession = chatSessionRepository.findById(sessionId).orElseThrow();
-                    var msg = new ChatMessage(currentSession, "assistant", fullAnswer.toString());
-                    chatMessageRepository.save(msg);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                onComplete.run();
-            },
-            onError
-        );
+        aiServiceClient.generateAnswerStream(req,
+                token -> {
+                    fullAnswer.append(token);
+                    onToken.accept(token);
+                },
+                () -> {
+                    try {
+                        var currentSession = chatSessionRepository.findById(sessionId).orElseThrow();
+                        var msg = new ChatMessage(currentSession, "assistant", fullAnswer.toString());
+                        chatMessageRepository.save(msg);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    onComplete.run();
+                },
+                onError);
     }
 
     @Transactional
@@ -204,7 +202,7 @@ public class ChatServiceImpl implements ChatService {
 
         Long validCourseId = (courseId != null && courseId != 0L) ? courseId : null;
         session.updateCourseId(validCourseId);
-        
+
         return chatSessionRepository.save(session);
     }
 
