@@ -21,7 +21,9 @@ public class NotificationController {
     private final NotificationQueryService notificationQueryService;
     private final com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService;
 
-    public NotificationController(NotificationQueryService notificationQueryService, com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService) {
+    public NotificationController(
+            NotificationQueryService notificationQueryService, 
+            com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService) {
         this.notificationQueryService = notificationQueryService;
         this.notificationCommandService = notificationCommandService;
     }

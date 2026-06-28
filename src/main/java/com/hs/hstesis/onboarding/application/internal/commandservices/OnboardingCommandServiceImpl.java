@@ -20,8 +20,29 @@ public class OnboardingCommandServiceImpl implements OnboardingCommandService {
     @Transactional
     public void handle(CompleteOnboardingCommand command) {
         var profile = onboardingRepository.findByUserId(command.userId())
-                .orElseGet(() -> new OnboardingProfile(command.userId()));
+                .orElseThrow(() -> new IllegalArgumentException("Onboarding profile not found for user: " + command.userId()));
+
         profile.markCompleted();
+        onboardingRepository.save(profile);
+    }
+
+    @Override
+    @Transactional
+    public void handle(com.hs.hstesis.onboarding.domain.model.commands.MarkQuizzesOnboardingCompletedCommand command) {
+        var profile = onboardingRepository.findByUserId(command.userId())
+                .orElseThrow(() -> new IllegalArgumentException("Onboarding profile not found for user: " + command.userId()));
+
+        profile.markQuizzesCompleted();
+        onboardingRepository.save(profile);
+    }
+
+    @Override
+    @Transactional
+    public void handle(com.hs.hstesis.onboarding.domain.model.commands.MarkRepositoryOnboardingCompletedCommand command) {
+        var profile = onboardingRepository.findByUserId(command.userId())
+                .orElseThrow(() -> new IllegalArgumentException("Onboarding profile not found for user: " + command.userId()));
+
+        profile.markRepositoryCompleted();
         onboardingRepository.save(profile);
     }
 }

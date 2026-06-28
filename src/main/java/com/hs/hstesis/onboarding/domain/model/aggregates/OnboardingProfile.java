@@ -19,6 +19,12 @@ public class OnboardingProfile extends AuditableAbstractAggregateRoot<Onboarding
     @Column(name = "completed", nullable = false)
     private boolean completed;
 
+    @Column(name = "quizzes_completed", nullable = false)
+    private boolean quizzesCompleted;
+
+    @Column(name = "repository_completed", nullable = false)
+    private boolean repositoryCompleted;
+
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
 
@@ -27,11 +33,21 @@ public class OnboardingProfile extends AuditableAbstractAggregateRoot<Onboarding
     public OnboardingProfile(Long userId) {
         this.userId = userId;
         this.completed = false;
+        this.quizzesCompleted = false;
+        this.repositoryCompleted = false;
         this.completedAt = null;
     }
 
     public void markCompleted() {
         this.completed = true;
         this.completedAt = LocalDateTime.now();
+    }
+
+    public void markQuizzesCompleted() {
+        this.quizzesCompleted = true;
+    }
+
+    public void markRepositoryCompleted() {
+        this.repositoryCompleted = true;
     }
 }

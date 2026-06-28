@@ -42,7 +42,9 @@ public class OnboardingController {
         var result = onboardingQueryService.handle(new GetOnboardingStatusQuery(userId));
         // If no record exists yet, the user has not completed onboarding
         boolean completed = result.map(p -> p.isCompleted()).orElse(false);
-        return ResponseEntity.ok(new OnboardingStatusResource(completed));
+        boolean quizzesCompleted = result.map(p -> p.isQuizzesCompleted()).orElse(false);
+        boolean repositoryCompleted = result.map(p -> p.isRepositoryCompleted()).orElse(false);
+        return ResponseEntity.ok(new OnboardingStatusResource(completed, quizzesCompleted, repositoryCompleted));
     }
 
     @PreAuthorize("isAuthenticated()")
@@ -57,7 +59,31 @@ public class OnboardingController {
         onboardingCommandService.handle(new CompleteOnboardingCommand(userId));
         return ResponseEntity.ok(new MessageResource("Onboarding completed successfully"));
     }
+    @PreAuthorize("isAuthenticated()")
+    @Operation(description = "Marks the quizzes onboarding as completed for the currently authenticated user.")
+    @PostMapping("/complete/quizzes")
+    public ResponseEntity<MessageResource> completeQuizzes() {
+        Long userId = getAuthenticatedUserId();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
 
+        onboardingCommandService.handle(new com.hs.hstesis.onboarding.domain.model.commands.MarkQuizzesOnboardingCompletedCommand(userId));
+        return ResponseEntity.ok(new MessageResource("Quizzes onboarding completed successfully"));
+    }
+
+    @PreAuthorize("isAuthenticated()")
+    @Operation(description = "Marks the repository onboarding as completed for the currently authenticated user.")
+    @PostMapping("/complete/repository")
+    public ResponseEntity<MessageResource> completeRepository() {
+        Long userId = getAuthenticatedUserId();
+        if (userId == null) {
+            return ResponseEntity.status(401).build();
+        }
+
+        onboardingCommandService.handle(new com.hs.hstesis.onboarding.domain.model.commands.MarkRepositoryOnboardingCompletedCommand(userId));
+        return ResponseEntity.ok(new MessageResource("Repository onboarding completed successfully"));
+    }
     private Long getAuthenticatedUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()
