@@ -9,6 +9,9 @@ import com.hs.hstesis.assessments.interfaces.rest.resources.QuestionResource;
 import com.hs.hstesis.assessments.interfaces.rest.resources.SubmitQuestionnaireResource;
 import com.hs.hstesis.assessments.interfaces.rest.transform.QuestionResourceFromEntityAssembler;
 import com.hs.hstesis.assessments.interfaces.rest.transform.SubmitQuestionnaireCommandFromResourceAssembler;
+
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,13 +22,14 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/assessments/questionnaires")
+@Tag(name = "Questionnaires", description = "Questionnaire management endpoints")
 public class QuestionnaireController {
 
     private final QuestionnaireCommandService questionnaireCommandService;
     private final QuestionnaireQueryService questionnaireQueryService;
 
     public QuestionnaireController(QuestionnaireCommandService questionnaireCommandService,
-                                   QuestionnaireQueryService questionnaireQueryService) {
+            QuestionnaireQueryService questionnaireQueryService) {
         this.questionnaireCommandService = questionnaireCommandService;
         this.questionnaireQueryService = questionnaireQueryService;
     }
@@ -39,7 +43,8 @@ public class QuestionnaireController {
 
     @PostMapping("/generate-remedial")
     @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR')")
-    public ResponseEntity<Void> generateRemedialQuestionnaire(@RequestBody com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
+    public ResponseEntity<Void> generateRemedialQuestionnaire(
+            @RequestBody com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
         questionnaireCommandService.handle(command);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
@@ -49,7 +54,8 @@ public class QuestionnaireController {
     public ResponseEntity<Void> submitQuestionnaire(
             @PathVariable Long questionnaireInstanceId,
             @RequestBody SubmitQuestionnaireResource resource) {
-        var command = SubmitQuestionnaireCommandFromResourceAssembler.toCommandFromResource(questionnaireInstanceId, resource);
+        var command = SubmitQuestionnaireCommandFromResourceAssembler.toCommandFromResource(questionnaireInstanceId,
+                resource);
         questionnaireCommandService.handle(command);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
@@ -59,25 +65,29 @@ public class QuestionnaireController {
     public ResponseEntity<Long> startQuestionnaire(
             @PathVariable Long questionnaireId,
             org.springframework.security.core.Authentication authentication) {
-            
-        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication.getPrincipal();
+
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication
+                .getPrincipal();
         Long studentId = userDetails.getId();
-        
-        var command = new com.hs.hstesis.assessments.domain.model.commands.StartQuestionnaireCommand(questionnaireId, studentId);
+
+        var command = new com.hs.hstesis.assessments.domain.model.commands.StartQuestionnaireCommand(questionnaireId,
+                studentId);
         Long instanceId = questionnaireCommandService.handle(command);
-        
+
         return ResponseEntity.ok(instanceId);
     }
 
     @GetMapping("/available")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
-    public ResponseEntity<List<com.hs.hstesis.assessments.interfaces.rest.resources.AvailableQuestionnaireResource>> getAvailableQuestionnaires(org.springframework.security.core.Authentication authentication) {
-        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication.getPrincipal();
+    public ResponseEntity<List<com.hs.hstesis.assessments.interfaces.rest.resources.AvailableQuestionnaireResource>> getAvailableQuestionnaires(
+            org.springframework.security.core.Authentication authentication) {
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication
+                .getPrincipal();
         Long studentId = userDetails.getId();
-        
+
         var query = new com.hs.hstesis.assessments.domain.model.queries.GetAvailableQuestionnairesQuery(studentId);
         var resources = questionnaireQueryService.handle(query);
-        
+
         return ResponseEntity.ok(resources);
     }
 
@@ -86,27 +96,29 @@ public class QuestionnaireController {
     public ResponseEntity<List<QuestionResource>> getQuestionsForInstance(
             @PathVariable Long questionnaireInstanceId,
             org.springframework.security.core.Authentication authentication) {
-            
-        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication.getPrincipal();
+
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication
+                .getPrincipal();
         Long studentId = userDetails.getId();
 
         var instancesQuery = new GetQuestionnaireInstancesByStudentIdQuery(studentId);
         var myInstances = questionnaireQueryService.handle(instancesQuery);
-        
+
         boolean ownsInstance = myInstances.stream()
                 .anyMatch(instance -> instance.getId().equals(questionnaireInstanceId));
-                
+
         if (!ownsInstance) {
-            throw new org.springframework.security.access.AccessDeniedException("You do not have permission to view this questionnaire instance.");
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "You do not have permission to view this questionnaire instance.");
         }
 
         var query = new GetQuestionsByQuestionnaireInstanceIdQuery(questionnaireInstanceId);
         var questions = questionnaireQueryService.handle(query);
-        
+
         var resources = questions.stream()
                 .map(QuestionResourceFromEntityAssembler::toResourceFromEntity)
                 .collect(Collectors.toList());
-                
+
         return ResponseEntity.ok(resources);
     }
 
@@ -115,17 +127,20 @@ public class QuestionnaireController {
     public ResponseEntity<com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireSubmissionResource> getSubmissionResults(
             @PathVariable Long questionnaireInstanceId,
             org.springframework.security.core.Authentication authentication) {
-            
-        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication.getPrincipal();
+
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication
+                .getPrincipal();
         Long studentId = userDetails.getId();
 
-        var query = new com.hs.hstesis.assessments.domain.model.queries.GetSubmissionByInstanceIdQuery(questionnaireInstanceId, studentId);
+        var query = new com.hs.hstesis.assessments.domain.model.queries.GetSubmissionByInstanceIdQuery(
+                questionnaireInstanceId, studentId);
         var submissionOpt = questionnaireQueryService.handle(query);
-        
+
         if (submissionOpt.isEmpty()) {
-            throw new com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException("Submission not found for this instance.");
+            throw new com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException(
+                    "Submission not found for this instance.");
         }
-        
+
         var submission = submissionOpt.get();
         var answerResources = submission.getAnswers().stream()
                 .map(a -> new com.hs.hstesis.assessments.interfaces.rest.resources.SubmissionAnswerResource(
@@ -135,14 +150,12 @@ public class QuestionnaireController {
                         a.getSelectedOptionIndex(),
                         a.getQuestion().getCorrectOptionIndex(),
                         a.getIsCorrect(),
-                        a.getAiFeedback()
-                ))
+                        a.getAiFeedback()))
                 .collect(Collectors.toList());
-                
+
         var resource = new com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireSubmissionResource(
                 submission.getScore(),
-                answerResources
-        );
+                answerResources);
         return ResponseEntity.ok(resource);
     }
 
@@ -151,7 +164,7 @@ public class QuestionnaireController {
     public ResponseEntity<List<com.hs.hstesis.assessments.interfaces.rest.resources.StudentGradeResource>> getAllSubmissions() {
         var query = new com.hs.hstesis.assessments.domain.model.queries.GetAllQuestionnaireSubmissionsQuery();
         var submissions = questionnaireQueryService.handle(query);
-        
+
         var resources = submissions.stream()
                 .map(sub -> {
                     var instance = sub.getQuestionnaireInstance();
@@ -163,11 +176,10 @@ public class QuestionnaireController {
                             questionnaire.getCourseId(),
                             questionnaire.getWeekNumber(),
                             sub.getScore(),
-                            sub.getSubmittedAt()
-                    );
+                            sub.getSubmittedAt());
                 })
                 .collect(Collectors.toList());
-                
+
         return ResponseEntity.ok(resources);
     }
 }
