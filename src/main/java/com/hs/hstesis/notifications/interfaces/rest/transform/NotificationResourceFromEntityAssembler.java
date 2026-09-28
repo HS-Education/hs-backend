@@ -9,6 +9,7 @@ public class NotificationResourceFromEntityAssembler {
                 entity.getId(),
                 entity.getUserId(),
                 entity.getMessage(),
+                entity.getType(),
                 entity.isRead(),
                 entity.getCreatedAt()
         );

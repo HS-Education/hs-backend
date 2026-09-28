@@ -19,6 +19,8 @@ public class NotificationQueryServiceImpl implements NotificationQueryService {
 
     @Override
     public List<Notification> handle(GetUnreadNotificationsByUserIdQuery query) {
-        return notificationRepository.findByUserIdAndIsReadFalse(query.userId());
+        return notificationRepository.findByUserIdAndIsReadFalseAndTypeIn(
+                query.userId(),
+                java.util.List.of(com.hs.hstesis.notifications.domain.model.valueobjects.NotificationType.values()));
     }
 }

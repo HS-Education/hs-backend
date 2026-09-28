@@ -13,7 +13,8 @@ public class NotificationContextFacade {
         this.notificationCommandService = notificationCommandService;
     }
 
-    public void createNotification(Long userId, String message) {
-        notificationCommandService.handle(new CreateNotificationCommand(userId, message));
+    public void createNotification(Long userId, String message,
+                                   com.hs.hstesis.notifications.domain.model.valueobjects.NotificationType type) {
+        notificationCommandService.handle(new CreateNotificationCommand(userId, message, type));
     }
 }

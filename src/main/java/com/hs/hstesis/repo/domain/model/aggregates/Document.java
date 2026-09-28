@@ -83,8 +83,6 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
         );
     }
 
-    private static final int EMBEDDING_DIMENSION = 768;
-
     public void replaceChunks (List<ChunkEmbeddingData> chunkData) {
         if (chunkData == null || chunkData.isEmpty()) {
             throw new DocumentChunksRequiredException(this.getId());

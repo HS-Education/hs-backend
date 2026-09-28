@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -31,13 +32,19 @@ public class AchievementController {
     private final AchievementQueryService achievementQueryService;
     private final AchievementCommandService achievementCommandService;
     private final AchievementInsightRepository achievementInsightRepository;
+    private final com.hs.hstesis.learning.interfaces.acl.LearningContextFacade learningContextFacade;
+    private final com.hs.hstesis.assessments.interfaces.acl.AssessmentsContextFacade assessmentsContextFacade;
 
     public AchievementController(AchievementQueryService achievementQueryService,
                                  AchievementCommandService achievementCommandService,
-                                 AchievementInsightRepository achievementInsightRepository) {
+                                 AchievementInsightRepository achievementInsightRepository,
+                                 com.hs.hstesis.learning.interfaces.acl.LearningContextFacade learningContextFacade,
+                                 com.hs.hstesis.assessments.interfaces.acl.AssessmentsContextFacade assessmentsContextFacade) {
         this.achievementQueryService = achievementQueryService;
         this.achievementCommandService = achievementCommandService;
         this.achievementInsightRepository = achievementInsightRepository;
+        this.learningContextFacade = learningContextFacade;
+        this.assessmentsContextFacade = assessmentsContextFacade;
     }
 
     @Operation(summary = "Get student performance and latest AI insight")
@@ -108,12 +115,34 @@ public class AchievementController {
         
         var latestInsightOpt = achievementInsightRepository.findTopByEntityTypeAndEntityIdOrderByCreatedAtDesc("CLASSROOM", classroomId);
         String insightText = latestInsightOpt.map(i -> i.getInsightText()).orElse(null);
+        java.util.Date insightCreatedAt = latestInsightOpt.map(i -> i.getCreatedAt()).orElse(null);
 
-        return ResponseEntity.ok(ClassroomAchievementResourceFromEntityAssembler.toResourceFromEntity(performanceOpt.get(), insightText));
+        return ResponseEntity.ok(new ClassroomAchievementResource(performanceOpt.get(), insightText, insightCreatedAt));
+    }
+
+    @Operation(summary = "Get classroom questionnaire coverage and question-level progress")
+    @GetMapping("/classrooms/{classroomId}/progress-details")
+    @PreAuthorize("hasAnyRole('TEACHER', 'COORDINATOR')")
+    public ResponseEntity<java.util.List<com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireProgressDto>>
+    getClassroomProgressDetails(@PathVariable Long classroomId,
+            org.springframework.security.core.Authentication authentication) {
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                authentication.getPrincipal();
+        if (!learningContextFacade.canViewClassroomProgress(userDetails.getId(), classroomId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Classroom progress is not available.");
+        }
+        var courseId = learningContextFacade.getCourseIdByClassroomId(classroomId)
+                .orElseThrow(() -> new com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException(
+                        "Classroom not found."));
+        var studentIds = learningContextFacade.getStudentsByClassroom(classroomId).stream()
+                .map(com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData::userId)
+                .collect(java.util.stream.Collectors.toSet());
+        return ResponseEntity.ok(assessmentsContextFacade.getCourseProgress(courseId, studentIds));
     }
 
     @Operation(summary = "Generate insight for classroom")
     @PostMapping("/classrooms/{classroomId}/insights")
+    @PreAuthorize("hasRole('TEACHER') and !hasRole('COORDINATOR')")
     public ResponseEntity<?> generateClassroomInsight(@PathVariable Long classroomId) {
         try {
             var insight = achievementCommandService.handle(new GenerateClassroomInsightCommand(classroomId));
@@ -131,8 +160,9 @@ public class AchievementController {
         
         var latestInsightOpt = achievementInsightRepository.findTopByEntityTypeAndEntityIdOrderByCreatedAtDesc("AREA", areaId);
         String insightText = latestInsightOpt.map(i -> i.getInsightText()).orElse(null);
+        java.util.Date insightCreatedAt = latestInsightOpt.map(i -> i.getCreatedAt()).orElse(null);
 
-        return ResponseEntity.ok(AreaAchievementResourceFromEntityAssembler.toResourceFromEntity(performanceOpt.get(), insightText));
+        return ResponseEntity.ok(new AreaAchievementResource(performanceOpt.get(), insightText, insightCreatedAt));
     }
 
     @Operation(summary = "Generate insight for area")
@@ -148,6 +178,7 @@ public class AchievementController {
 
     @Operation(summary = "Generate complementary recommendations (quiz) for a classroom based on AI")
     @PostMapping("/classrooms/{classroomId}/recommendations")
+    @PreAuthorize("hasRole('COORDINATOR')")
     public ResponseEntity<?> generateClassroomRecommendation(
             @PathVariable Long classroomId, 
             @RequestBody com.hs.hstesis.achievements.interfaces.rest.resources.GenerateRecommendationResource resource) {

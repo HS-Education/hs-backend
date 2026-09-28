@@ -2,6 +2,7 @@ package com.hs.hstesis.iam.interfaces.acl;
 
 import com.hs.hstesis.iam.domain.model.aggregates.User;
 import com.hs.hstesis.iam.domain.model.queries.GetUserByIdQuery;
+import com.hs.hstesis.iam.domain.model.queries.GetAllUsersQuery;
 import com.hs.hstesis.iam.domain.model.queries.GetUsersByIdsQuery;
 import com.hs.hstesis.iam.domain.services.UserQueryService;
 import com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
@@ -74,6 +75,14 @@ public class IamContextFacade {
                         .stream()
                         .anyMatch(role -> role.getRoleName().equals(roleName)))
                 .orElse(false);
+    }
+
+    public List<Long> getActiveNonAdminUserIds() {
+        return userQueryService.handle(new GetAllUsersQuery()).stream()
+                .filter(User::isActive)
+                .map(User::getId)
+                .distinct()
+                .toList();
     }
 
     public Long getAuthenticatedUserId() {

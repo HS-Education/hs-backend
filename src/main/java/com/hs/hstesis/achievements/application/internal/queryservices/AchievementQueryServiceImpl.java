@@ -41,6 +41,7 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
         double totalScore = 0;
         java.util.Map<Long, java.util.List<com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireSubmissionDto>> submissionsByTopic = new java.util.HashMap<>();
         java.util.Map<Long, TopicPerformance> baseTopicInfo = new java.util.HashMap<>();
+        java.util.Map<Long, java.util.List<com.hs.hstesis.assessments.interfaces.acl.dto.RemedialTrackingDto>> remedialsByCourse = new java.util.HashMap<>();
 
         for (var sub : submissions) {
             var questionnaireOpt = externalAssessmentService.getQuestionnaireById(sub.questionnaireId());
@@ -88,6 +89,19 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
             }
             
             var base = baseTopicInfo.get(tId);
+            var remedialScore = remedialsByCourse
+                    .computeIfAbsent(base.courseId(), courseId -> externalAssessmentService
+                            .getRemedialTrackingsByStudentIdAndCourseId(query.studentId(), courseId))
+                    .stream()
+                    .filter(r -> r.weakTopicId().equals(tId) && r.lastRemedialScore() != null)
+                    .mapToInt(r -> r.lastRemedialScore())
+                    .max()
+                    .orElse(0);
+            if (remedialScore > maxScoreRaw) {
+                maxScoreRaw = remedialScore;
+                maxPercentage = (remedialScore / 20.0) * 100.0;
+                progressHistory.add(maxPercentage);
+            }
             topics.add(new TopicPerformance(
                     base.topicId(), base.topicName(), base.weekNumber(),
                     maxScoreRaw, maxPercentage, base.gradingPeriodId(), base.courseId(), progressHistory
@@ -166,6 +180,7 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
     @Override
     public Optional<ClassroomPerformance> handle(GetClassroomPerformanceQuery query) {
         var students = learningContextFacade.getStudentsByClassroom(query.classroomId());
+        var classroomCourseId = learningContextFacade.getCourseIdByClassroomId(query.classroomId()).orElse(null);
         
         if (students.isEmpty()) {
             return Optional.of(new ClassroomPerformance(query.classroomId(), "Aula " + query.classroomId(), 0.0, List.of()));
@@ -180,7 +195,14 @@ public class AchievementQueryServiceImpl implements AchievementQueryService {
             if (perfOpt.isPresent()) {
                 var perf = perfOpt.get();
                 // Overwrite the generic student name with the actual name
-                var actualPerf = new StudentPerformance(perf.studentId(), student.userName(), perf.averageScore(), perf.topics());
+                var classroomTopics = perf.topics().stream()
+                        .filter(topic -> classroomCourseId == null || java.util.Objects.equals(topic.courseId(), classroomCourseId))
+                        .toList();
+                double studentAverage = classroomTopics.stream()
+                        .mapToDouble(TopicPerformance::percentage)
+                        .average()
+                        .orElse(0.0);
+                var actualPerf = new StudentPerformance(perf.studentId(), student.userName(), studentAverage, classroomTopics);
                 studentPerformances.add(actualPerf);
                 totalAverageScore += actualPerf.averageScore();
             } else {

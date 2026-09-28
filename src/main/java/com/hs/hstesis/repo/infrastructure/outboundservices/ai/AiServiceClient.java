@@ -2,10 +2,12 @@ package com.hs.hstesis.repo.infrastructure.outboundservices.ai;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.http.HttpClient;
 import java.util.function.Consumer;
 
 @Service
@@ -17,8 +19,13 @@ public class AiServiceClient {
             @Value("${ai.service.url:http://localhost:8000}") String baseUrl,
             @Value("${ai.service.api-key:your-secure-api-key}") String apiKey) {
 
+        HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(new JdkClientHttpRequestFactory(httpClient))
                 .defaultHeader("x-api-key", apiKey)
                 .build();
     }

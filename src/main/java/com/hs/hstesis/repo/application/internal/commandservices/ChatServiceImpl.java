@@ -10,11 +10,13 @@ import com.hs.hstesis.repo.infrastructure.outboundservices.ai.GenerateRequest;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.ChatMessageRepository;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.ChatSessionRepository;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentChunkRepository;
+import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentChunkWithMetadata;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,6 +44,7 @@ public class ChatServiceImpl implements ChatService {
     @Transactional
     public ChatSession createSession(Long courseId, Long userId) {
         if (courseId != null) {
+            requireCourseAccess(userId, courseId);
             return chatSessionRepository.save(new ChatSession(courseId, userId));
         } else {
             return chatSessionRepository.save(new ChatSession(userId));
@@ -66,6 +69,8 @@ public class ChatServiceImpl implements ChatService {
             throw new AuthorizationDeniedException("Not your session");
         }
 
+        requireCourseAccess(userId, session.getCourseId());
+
         return chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
     }
 
@@ -79,31 +84,13 @@ public class ChatServiceImpl implements ChatService {
             throw new AuthorizationDeniedException("Not your session");
         }
 
+        requireCourseAccess(userId, session.getCourseId());
         var userMsg = new ChatMessage(session, "user", question);
-        chatMessageRepository.save(userMsg);
-
-        List<Long> courseIdsToSearch;
-        if (session.getCourseId() != null && session.getCourseId() != 0L) {
-            courseIdsToSearch = List.of(session.getCourseId());
-            System.out.println("Using manual courseId: " + courseIdsToSearch);
-        } else {
-            courseIdsToSearch = new java.util.ArrayList<>(externalLearningService.getEnrolledCourseIds(userId));
-            System.out.println("Using enrolled courses for userId " + userId + ": " + courseIdsToSearch);
-        }
+        chatMessageRepository.saveAndFlush(userMsg);
 
         var embedResponse = aiServiceClient.embedQuery(question);
         var vectorString = formatVectorForPg(embedResponse.embedding());
-
-        List<String> contextTexts = List.of();
-        if (!courseIdsToSearch.isEmpty()) {
-            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString,
-                    10);
-            contextTexts = chunksWithMeta.stream()
-                    .map(c -> String.format(
-                            "Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s",
-                            c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
-                    .toList();
-        }
+        List<String> contextTexts = accessibleContext(userId, session.getCourseId(), vectorString);
 
         var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
         var messagesForAi = history.stream()
@@ -129,30 +116,13 @@ public class ChatServiceImpl implements ChatService {
             throw new AuthorizationDeniedException("Not your session");
         }
 
+        requireCourseAccess(userId, session.getCourseId());
         var userMsg = new ChatMessage(session, "user", question);
-        chatMessageRepository.save(userMsg);
-
-        List<Long> courseIdsToSearch;
-        if (session.getCourseId() != null && session.getCourseId() != 0L) {
-            courseIdsToSearch = List.of(session.getCourseId());
-        } else {
-            courseIdsToSearch = new java.util.ArrayList<>(externalLearningService.getEnrolledCourseIds(userId));
-        }
+        chatMessageRepository.saveAndFlush(userMsg);
 
         var embedResponse = aiServiceClient.embedQuery(question);
         var vectorString = formatVectorForPg(embedResponse.embedding());
-
-        List<String> contextTexts = List.of();
-        if (!courseIdsToSearch.isEmpty()) {
-            var chunksWithMeta = documentChunkRepository.findSimilarChunksByCourseIdsIn(courseIdsToSearch, vectorString,
-                    10);
-
-            contextTexts = chunksWithMeta.stream()
-                    .map(c -> String.format(
-                            "Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s",
-                            c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
-                    .toList();
-        }
+        List<String> contextTexts = accessibleContext(userId, session.getCourseId(), vectorString);
 
         var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
         var messagesForAi = history.stream()
@@ -161,6 +131,18 @@ public class ChatServiceImpl implements ChatService {
 
         var req = new GenerateRequest(messagesForAi, contextTexts, 512, 0.2f, true);
         StringBuilder fullAnswer = new StringBuilder();
+        var assistantMsg = chatMessageRepository.saveAndFlush(new ChatMessage(session, "assistant", ""));
+        var responsePersisted = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        Runnable persistResponse = () -> {
+            if (!responsePersisted.compareAndSet(false, true)) return;
+            String answer = fullAnswer.toString();
+            if (answer.isBlank()) {
+                answer = "No se pudo completar la respuesta. Intenta enviar el mensaje nuevamente.";
+            }
+            assistantMsg.updateContent(answer);
+            chatMessageRepository.saveAndFlush(assistantMsg);
+        };
 
         aiServiceClient.generateAnswerStream(req,
                 token -> {
@@ -169,15 +151,20 @@ public class ChatServiceImpl implements ChatService {
                 },
                 () -> {
                     try {
-                        var currentSession = chatSessionRepository.findById(sessionId).orElseThrow();
-                        var msg = new ChatMessage(currentSession, "assistant", fullAnswer.toString());
-                        chatMessageRepository.save(msg);
+                        persistResponse.run();
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                     onComplete.run();
                 },
-                onError);
+                error -> {
+                    try {
+                        persistResponse.run();
+                    } catch (Exception persistenceError) {
+                        persistenceError.printStackTrace();
+                    }
+                    onError.accept(error);
+                });
     }
 
     @Transactional
@@ -190,6 +177,41 @@ public class ChatServiceImpl implements ChatService {
         return "[" + embedding.stream().map(String::valueOf).collect(Collectors.joining(",")) + "]";
     }
 
+    private void requireCourseAccess(Long userId, Long courseId) {
+        if (courseId == null || courseId == 0L) return;
+        if (externalLearningService.doesCoordinatorOwnCourse(userId, courseId)) return;
+        if (externalLearningService.getUserEnrollmentContextByCourse(userId, courseId).isPresent()) return;
+        throw new AuthorizationDeniedException("Course is not accessible");
+    }
+
+    private List<String> accessibleContext(Long userId, Long selectedCourseId, String vector) {
+        List<Long> courseIds = selectedCourseId != null && selectedCourseId != 0L
+                ? List.of(selectedCourseId)
+                : externalLearningService.getEnrolledCourseIds(userId);
+        return courseIds.stream()
+                .distinct()
+                .flatMap(courseId -> {
+                    List<DocumentChunkWithMetadata> chunks;
+                    if (externalLearningService.doesCoordinatorOwnCourse(userId, courseId)) {
+                        chunks = documentChunkRepository.findSimilarChunksByCourseIdsIn(List.of(courseId), vector, 10);
+                    } else {
+                        var enrollment = externalLearningService.getUserEnrollmentContextByCourse(userId, courseId);
+                        if (enrollment.isEmpty()) return java.util.stream.Stream.empty();
+                        var context = enrollment.get();
+                        chunks = documentChunkRepository.findSimilarChunksByAccessibleTarget(
+                                courseId, context.educationLevel().name(), context.gradeLevel().name(), vector, 10);
+                    }
+                    return chunks.stream();
+                })
+                .sorted(Comparator.comparing(DocumentChunkWithMetadata::getSimilarity,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(10)
+                .map(c -> String.format(
+                        "Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s",
+                        c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
+                .toList();
+    }
+
     @Override
     @Transactional
     public ChatSession updateSessionCourse(Long sessionId, Long userId, Long courseId) {
@@ -200,7 +222,9 @@ public class ChatServiceImpl implements ChatService {
             throw new AuthorizationDeniedException("Not your session");
         }
 
+        requireCourseAccess(userId, session.getCourseId());
         Long validCourseId = (courseId != null && courseId != 0L) ? courseId : null;
+        requireCourseAccess(userId, validCourseId);
         session.updateCourseId(validCourseId);
 
         return chatSessionRepository.save(session);

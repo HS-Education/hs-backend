@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,12 +21,27 @@ public class NotificationController {
 
     private final NotificationQueryService notificationQueryService;
     private final com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService;
+    private final com.hs.hstesis.notifications.infrastructure.sse.NotificationSseRegistry sseRegistry;
 
     public NotificationController(
             NotificationQueryService notificationQueryService, 
-            com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService) {
+            com.hs.hstesis.notifications.domain.services.NotificationCommandService notificationCommandService,
+            com.hs.hstesis.notifications.infrastructure.sse.NotificationSseRegistry sseRegistry) {
         this.notificationQueryService = notificationQueryService;
         this.notificationCommandService = notificationCommandService;
+        this.sseRegistry = sseRegistry;
+    }
+
+    @Operation(description = "Open the server-sent events stream for the authenticated user")
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamNotifications() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new org.springframework.security.access.AccessDeniedException("Unauthorized");
+        }
+
+        var userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        return sseRegistry.subscribe(userDetails.getId());
     }
 
     @Operation(description = "Get unread notifications for the authenticated user")
