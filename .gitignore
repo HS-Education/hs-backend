@@ -50,6 +50,8 @@ ai-service/*
 ai-service/tests/*
 !ai-service/tests/test_*.py
 !ai-service/tests/live_openrouter.py
+!ai-service/tests/live_prompt_injection.py
+!ai-service/tests/live_worker_routes.py
 
 ### Database ###
 db/*
