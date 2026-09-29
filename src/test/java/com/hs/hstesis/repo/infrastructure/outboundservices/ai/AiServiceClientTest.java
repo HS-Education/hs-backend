@@ -45,4 +45,17 @@ class AiServiceClientTest {
 
         assertThat(tokens).containsExactly("answer");
     }
+
+    @Test
+    void streamErrorAfterPartialTokensIsReportedAsFailure() {
+        var tokens = new ArrayList<String>();
+        var reader = new BufferedReader(new StringReader(
+                "data: {\"token\":\"partial\"}\n\n" +
+                "data: {\"error\":\"incomplete_generation\"}\n\n"));
+
+        assertThatThrownBy(() -> AiServiceClient.consumeStream(reader, tokens::add))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("incomplete generation");
+        assertThat(tokens).containsExactly("partial");
+    }
 }

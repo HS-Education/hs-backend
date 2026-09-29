@@ -89,6 +89,10 @@ public class AiServiceClient {
                 completed = true;
                 break;
             }
+            var event = MAPPER.readTree(data);
+            if (event.isObject() && event.hasNonNull("error")) {
+                throw new IOException("AI stream reported an incomplete generation");
+            }
             onToken.accept(parseToken(data));
         }
         if (!completed) throw new IOException("AI stream ended without a completion signal");

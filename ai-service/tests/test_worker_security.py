@@ -11,7 +11,7 @@ import fitz
 import httpx
 from fastapi import HTTPException
 
-from safety import CapacityExceeded, CapacityLimit, build_messages, extract_chunks, validate_embeddings, sse_token_frame
+from safety import CapacityExceeded, CapacityLimit, build_messages, extract_chunks, validate_embeddings, sse_error_frame, sse_token_frame
 
 FAKE_ENV = {
     "WORKER_API_KEY": "offline-worker-key",
@@ -55,7 +55,7 @@ class WorkerSecurityTest(unittest.TestCase):
         self.assertEqual(frame.count("\ndata: "), 0)
         self.assertEqual(json.loads(frame.removeprefix("data: ").strip())["token"], token)
 
-    def test_truncated_model_stream_never_emits_done(self):
+    def test_truncated_model_stream_emits_error_instead_of_success(self):
         worker = self.worker
         chunks = [
             SimpleNamespace(choices=[SimpleNamespace(
@@ -67,8 +67,26 @@ class WorkerSecurityTest(unittest.TestCase):
             create=lambda **_kwargs: iter(chunks))))
         with patch.object(worker, "openai_client", client):
             frames = list(worker.call_openrouter_generate_stream("system", [], 32, 0.2))
-        self.assertEqual(frames, [sse_token_frame("partial answer")])
+        self.assertEqual(frames, [
+            sse_token_frame("partial answer"),
+            sse_error_frame("incomplete_generation"),
+        ])
         self.assertNotIn("[DONE]", "".join(frames))
+
+    def test_provider_exception_emits_a_redacted_terminal_error(self):
+        worker = self.worker
+
+        def broken_stream(**_kwargs):
+            yield SimpleNamespace(choices=[SimpleNamespace(
+                delta=SimpleNamespace(content="partial answer"), finish_reason=None)])
+            raise RuntimeError("secret-canary provider detail")
+
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=broken_stream)))
+        with patch.object(worker, "openai_client", client):
+            frames = list(worker.call_openrouter_generate_stream("system", [], 32, 0.2))
+
+        self.assertEqual(frames[-1], sse_error_frame("provider_error"))
+        self.assertNotIn("secret-canary", "".join(frames))
 
     def test_normally_finished_model_stream_emits_done(self):
         worker = self.worker
@@ -79,6 +97,18 @@ class WorkerSecurityTest(unittest.TestCase):
         with patch.object(worker, "openai_client", client):
             frames = list(worker.call_openrouter_generate_stream("system", [], 32, 0.2))
         self.assertEqual(frames[-1], "data: [DONE]\n\n")
+
+    def test_empty_model_stream_is_not_treated_as_success(self):
+        worker = self.worker
+        chunks = [SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content=None), finish_reason="stop")])]
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **_kwargs: iter(chunks))))
+        with patch.object(worker, "openai_client", client):
+            frames = list(worker.call_openrouter_generate_stream("system", [], 32, 0.2))
+
+        self.assertEqual(frames, [sse_error_frame("empty_response")])
+        self.assertNotIn("[DONE]", "".join(frames))
 
     def test_http_rejects_forged_system_role_and_redacts_invalid_body(self):
         async def request():

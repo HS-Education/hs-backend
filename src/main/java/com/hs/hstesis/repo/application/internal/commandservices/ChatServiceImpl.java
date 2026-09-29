@@ -11,6 +11,8 @@ import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.ChatMessa
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.ChatSessionRepository;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentChunkRepository;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentChunkWithMetadata;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class ChatServiceImpl implements ChatService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ChatServiceImpl.class);
+
 
     private final ChatSessionRepository chatSessionRepository;
     private final ChatMessageRepository chatMessageRepository;
@@ -88,16 +92,24 @@ public class ChatServiceImpl implements ChatService {
         var userMsg = new ChatMessage(session, "user", question);
         chatMessageRepository.saveAndFlush(userMsg);
 
+        long preparationStartedAt = System.nanoTime();
         var embedResponse = aiServiceClient.embedQuery(question);
+        long embeddingMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - preparationStartedAt);
         var vectorString = formatVectorForPg(embedResponse.embedding());
+        long retrievalStartedAt = System.nanoTime();
         List<String> contextTexts = accessibleContext(userId, session.getCourseId(), vectorString);
+        long retrievalMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - retrievalStartedAt);
+        LOGGER.info("Sery chat context prepared (sessionId={}, sourceChunks={}, embeddingMs={}, retrievalMs={})",
+                sessionId, contextTexts.size(), embeddingMs, retrievalMs);
 
         var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
         var messagesForAi = history.stream()
                 .map(msg -> new AiMessageDto(msg.getRole(), msg.getContent()))
                 .toList();
 
-        var req = new GenerateRequest(messagesForAi, contextTexts, 512, 0.2f, false);
+        var req = new GenerateRequest(messagesForAi, contextTexts, 1024, 0.2f, false);
 
         var generateResponse = aiServiceClient.generateAnswer(req);
 
@@ -120,16 +132,24 @@ public class ChatServiceImpl implements ChatService {
         var userMsg = new ChatMessage(session, "user", question);
         chatMessageRepository.saveAndFlush(userMsg);
 
+        long preparationStartedAt = System.nanoTime();
         var embedResponse = aiServiceClient.embedQuery(question);
+        long embeddingMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - preparationStartedAt);
         var vectorString = formatVectorForPg(embedResponse.embedding());
+        long retrievalStartedAt = System.nanoTime();
         List<String> contextTexts = accessibleContext(userId, session.getCourseId(), vectorString);
+        long retrievalMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - retrievalStartedAt);
+        LOGGER.info("Sery chat context prepared (sessionId={}, sourceChunks={}, embeddingMs={}, retrievalMs={})",
+                sessionId, contextTexts.size(), embeddingMs, retrievalMs);
 
         var history = chatMessageRepository.findAllBySessionIdOrderByCreatedAtAsc(sessionId);
         var messagesForAi = history.stream()
                 .map(msg -> new AiMessageDto(msg.getRole(), msg.getContent()))
                 .toList();
 
-        var req = new GenerateRequest(messagesForAi, contextTexts, 512, 0.2f, true);
+        var req = new GenerateRequest(messagesForAi, contextTexts, 1024, 0.2f, true);
         StringBuilder fullAnswer = new StringBuilder();
         var assistantMsg = chatMessageRepository.saveAndFlush(new ChatMessage(session, "assistant", ""));
         var responsePersisted = new java.util.concurrent.atomic.AtomicBoolean(false);

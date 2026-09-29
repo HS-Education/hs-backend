@@ -10,7 +10,7 @@ import fitz
 import pika
 from safety import (
     SYSTEM_PROMPT, UNTRUSTED_DATA_RULE, MAX_PDF_BYTES, MAX_REQUEST_CHARS,
-    CapacityExceeded, CapacityLimit, build_messages, extract_chunks, validate_embeddings, sse_token_frame,
+    CapacityExceeded, CapacityLimit, build_messages, extract_chunks, validate_embeddings, sse_token_frame, sse_error_frame,
 )
 from fastapi import Depends, FastAPI, Header, HTTPException, status, Request
 from fastapi.exceptions import RequestValidationError
@@ -282,28 +282,42 @@ def call_openrouter_generate(system_prompt: str, messages: list[dict], max_token
 def call_openrouter_generate_stream(system_prompt: str, messages: list[dict], max_tokens: int, temperature: float):
     llm_messages = [{"role": "system", "content": system_prompt}]
     llm_messages.extend(messages)
-    
-    with provider_capacity.acquire():
-        completion = openai_client.chat.completions.create(
-            model=settings.openrouter_chat_model,
-            messages=llm_messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            extra_body={"reasoning": {"effort": "low"}},
-            stream=True,
-        )
-        finish_reason = None
-        for chunk in completion:
-            if not chunk.choices:
-                continue
-            choice = chunk.choices[0]
-            if choice.finish_reason is not None:
-                finish_reason = choice.finish_reason
-            if choice.delta and choice.delta.content is not None:
-                yield sse_token_frame(choice.delta.content)
-        if finish_reason != "stop":
-            logger.warning("OpenRouter stream did not finish normally (finish_reason=%s)", finish_reason)
-            return
+
+    try:
+        with provider_capacity.acquire():
+            completion = openai_client.chat.completions.create(
+                model=settings.openrouter_chat_model,
+                messages=llm_messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                extra_body={"reasoning": {"effort": "low"}},
+                stream=True,
+            )
+            finish_reason = None
+            has_answer_text = False
+            for chunk in completion:
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                if choice.finish_reason is not None:
+                    finish_reason = choice.finish_reason
+                if choice.delta and choice.delta.content is not None:
+                    token = choice.delta.content
+                    has_answer_text = has_answer_text or bool(token.strip())
+                    yield sse_token_frame(token)
+            if finish_reason != "stop":
+                logger.warning("OpenRouter stream did not finish normally (finish_reason=%s)", finish_reason)
+                yield sse_error_frame("incomplete_generation")
+                return
+            if not has_answer_text:
+                logger.warning("OpenRouter stream completed without answer text")
+                yield sse_error_frame("empty_response")
+                return
+    except Exception as error:
+        logger.warning("OpenRouter stream failed (error_type=%s)", type(error).__name__)
+        yield sse_error_frame("provider_error")
+        return
+
     yield "data: [DONE]\n\n"
 
 
