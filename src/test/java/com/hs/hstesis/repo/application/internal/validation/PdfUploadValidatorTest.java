@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PdfUploadValidatorTest {
-    private final PdfUploadValidator validator = new PdfUploadValidator();
+    private final PdfUploadValidator validator = new PdfUploadValidator(bytes -> {});
 
     private static byte[] pdf(boolean active, boolean encrypted) throws IOException {
         try (PDDocument document = new PDDocument(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
@@ -57,6 +57,20 @@ class PdfUploadValidatorTest {
                 .isInstanceOf(InvalidPdfUploadException.class);
         assertThatThrownBy(() -> validator.validate(file("not a pdf".getBytes(),
                 "course.pdf", "application/pdf"), "course.pdf"))
+                .isInstanceOf(InvalidPdfUploadException.class);
+    }
+
+    @Test
+    void scannerReceivesExactBytesAndDetectionPreventsStorage() throws Exception {
+        byte[] original = pdf(false, false);
+        final byte[][] scanned = new byte[1][];
+        var inspecting = new PdfUploadValidator(bytes -> scanned[0] = bytes);
+        UploadFile safe = inspecting.validate(file(original, "course.pdf", "application/pdf"), "course.pdf");
+        assertThat(scanned[0]).isEqualTo(original);
+        assertThat(safe.openStream().readAllBytes()).isEqualTo(scanned[0]);
+
+        var rejecting = new PdfUploadValidator(bytes -> { throw new InvalidPdfUploadException(); });
+        assertThatThrownBy(() -> rejecting.validate(file(original, "course.pdf", "application/pdf"), "course.pdf"))
                 .isInstanceOf(InvalidPdfUploadException.class);
     }
 

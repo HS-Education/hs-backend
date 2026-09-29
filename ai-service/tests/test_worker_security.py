@@ -55,6 +55,31 @@ class WorkerSecurityTest(unittest.TestCase):
         self.assertEqual(frame.count("\ndata: "), 0)
         self.assertEqual(json.loads(frame.removeprefix("data: ").strip())["token"], token)
 
+    def test_truncated_model_stream_never_emits_done(self):
+        worker = self.worker
+        chunks = [
+            SimpleNamespace(choices=[SimpleNamespace(
+                delta=SimpleNamespace(content="partial answer"), finish_reason=None)]),
+            SimpleNamespace(choices=[SimpleNamespace(
+                delta=SimpleNamespace(content=None), finish_reason="length")]),
+        ]
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **_kwargs: iter(chunks))))
+        with patch.object(worker, "openai_client", client):
+            frames = list(worker.call_openrouter_generate_stream("system", [], 32, 0.2))
+        self.assertEqual(frames, [sse_token_frame("partial answer")])
+        self.assertNotIn("[DONE]", "".join(frames))
+
+    def test_normally_finished_model_stream_emits_done(self):
+        worker = self.worker
+        chunks = [SimpleNamespace(choices=[SimpleNamespace(
+            delta=SimpleNamespace(content="complete answer"), finish_reason="stop")])]
+        client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+            create=lambda **_kwargs: iter(chunks))))
+        with patch.object(worker, "openai_client", client):
+            frames = list(worker.call_openrouter_generate_stream("system", [], 32, 0.2))
+        self.assertEqual(frames[-1], "data: [DONE]\n\n")
+
     def test_http_rejects_forged_system_role_and_redacts_invalid_body(self):
         async def request():
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=self.worker.app), base_url="http://test") as client:
