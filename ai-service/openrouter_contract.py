@@ -11,6 +11,8 @@ def create_client(api_key: str, referer: str, title: str, http_client: Any = Non
     options: dict[str, Any] = {
         "api_key": api_key,
         "base_url": "https://openrouter.ai/api/v1",
+        "timeout": 45.0,
+        "max_retries": 1,
         "default_headers": {
             "HTTP-Referer": referer,
             "X-OpenRouter-Title": title,

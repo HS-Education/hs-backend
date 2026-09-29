@@ -3,7 +3,7 @@ fastapi==0.135.2
 uvicorn[standard]==0.42.0
 
 # --- CONFIGURATION & ENVIRONMENT VARIABLES ---
-pydantic-settings==2.13.1
+pydantic-settings==2.14.2
 python-dotenv==1.2.2
 
 # --- MESSAGE BROKER (RabbitMQ) ---
@@ -16,5 +16,5 @@ minio==7.2.20
 PyMuPDF==1.27.2.2
 
 # --- ARTIFICIAL INTELLIGENCE & LLM / EMBEDDINGS (OpenRouter API) ---
-openai>=1.30.0
-httpx>=0.27.0
+openai==3.19.2
+httpx==0.28.1

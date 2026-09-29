@@ -30,7 +30,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      FROM Document d
      JOIN d.targets t
      WHERE t.id.courseId = :courseId
-       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
+       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY', 'FAILED')
     """)
     List<Document> findAllByCourseId(Long courseId);
 

@@ -16,7 +16,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
             FROM document_chunks c
             JOIN documents d ON c.document_id = d.id
             JOIN document_targets t ON d.id = t.document_id
-            WHERE t.course_id = :courseId
+            WHERE t.course_id = :courseId AND d.status = 'READY'
             ORDER BY c.embedding <=> cast(:vector as vector)
             LIMIT :limit
             """, nativeQuery = true)
@@ -30,7 +30,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
             FROM document_chunks c
             JOIN documents d ON c.document_id = d.id
             JOIN document_targets t ON d.id = t.document_id
-            WHERE t.course_id IN (:courseIds)
+            WHERE t.course_id IN (:courseIds) AND d.status = 'READY'
             ORDER BY c.embedding <=> cast(:vector as vector)
             LIMIT :limit
             """, nativeQuery = true)
@@ -47,6 +47,7 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
             WHERE t.course_id = :courseId
               AND t.education_level = :educationLevel
               AND t.grade_level = :gradeLevel
+              AND d.status = 'READY'
             ORDER BY c.embedding <=> cast(:vector as vector)
             LIMIT :limit
             """, nativeQuery = true)

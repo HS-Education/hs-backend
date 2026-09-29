@@ -15,6 +15,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -51,21 +52,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
-        logger.error("Not Readable: {}", ex.getMessage());
-        Throwable mostSpecificCause = ex.getMostSpecificCause();
-
-        if (mostSpecificCause instanceof IllegalArgumentException illegalArgumentEx) {
-            return handleIllegalArgument(illegalArgumentEx);
-        }
-
+        logger.warn("Request body is not readable");
         if (ex.getCause() instanceof InvalidFormatException invalidFormatException) {
-            String rejectedValue = invalidFormatException.getValue().toString();
             Class<?> targetType = invalidFormatException.getTargetType();
 
             var errorResponse = new ApiErrorResponse(
                     HttpStatus.BAD_REQUEST.value(),
                     "Type Mismatch",
-                    String.format("Invalid value '%s' for expected type '%s'", rejectedValue, targetType.getSimpleName())
+                    String.format("Invalid value for expected type '%s'", targetType.getSimpleName())
             );
             return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
         }
@@ -76,6 +70,17 @@ public class GlobalExceptionHandler {
                 "The request body contains invalid JSON syntax or structure."
         );
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        // Do not include the rejected value or the conversion exception in the response or logs.
+        logger.warn("Invalid request parameter type");
+        return ResponseEntity.badRequest().body(new ApiErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Invalid Parameter",
+                "A request parameter has an invalid type."
+        ));
     }
 
     @ExceptionHandler(AuthenticationException.class)

@@ -1,4 +1,4 @@
-param([switch]$SkipSmoke)
+param([switch]$SkipSmoke, [switch]$RunLoad, [switch]$DockerBackend, [switch]$SkipDependencyAudit)
 
 $ErrorActionPreference = 'Stop'
 $backendRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -6,14 +6,21 @@ $frontRoot = (Resolve-Path (Join-Path $backendRoot '..\hs-tesis-front')).Path
 $python = Join-Path $backendRoot 'ai-service\.venv\Scripts\python.exe'
 $composeFile = Join-Path $PSScriptRoot 'compose.quality-gate.yaml'
 $mavenRepository = Join-Path $env:USERPROFILE '.m2\repository'
+if ($SkipSmoke -and $RunLoad) { throw '-RunLoad requires the isolated smoke environment.' }
 
 function Assert-Success([string]$stage) {
     if ($LASTEXITCODE -ne 0) { throw "$stage failed with exit code $LASTEXITCODE" }
 }
 
-function Wait-Http([string]$url, [System.Diagnostics.Process]$process) {
+function Wait-Http([string]$url, [System.Diagnostics.Process]$process, [string]$containerName) {
     for ($attempt = 0; $attempt -lt 90; $attempt++) {
-        if ($process.HasExited) { throw "Process exited before $url became ready" }
+        if ($process -and $process.HasExited) { throw "Process exited before $url became ready" }
+        if ($containerName) {
+            $running = & docker inspect --format '{{.State.Running}}' $containerName 2>$null
+            if ($LASTEXITCODE -ne 0 -or $running -ne 'true') {
+                throw "Container $containerName exited before $url became ready"
+            }
+        }
         try {
             $response = Invoke-WebRequest -Uri $url -TimeoutSec 2 -UseBasicParsing
             if ($response.StatusCode -lt 500) { return }
@@ -63,7 +70,25 @@ Push-Location $frontRoot
 try {
     & (Join-Path $frontRoot 'node_modules\.bin\vitest.cmd') run --configLoader runner
     Assert-Success 'Angular unit tests'
+    & node (Join-Path $frontRoot 'scripts\check-i18n.cjs')
+    Assert-Success 'Translation key check'
+    & (Join-Path $frontRoot 'node_modules\.bin\ng.cmd') build
+    Assert-Success 'Angular production build'
 } finally { Pop-Location }
+
+if (-not $SkipDependencyAudit) {
+    & docker run --rm --mount "type=bind,source=$backendRoot,target=/src,readonly" 'ghcr.io/google/osv-scanner@sha256:afd838850ac1a0fcc15ff4a041dc9ba11123c3f0d2666217a5f0fcf9222b55fa' scan source --lockfile=/src/pom.xml --format=table --verbosity=error
+    Assert-Success 'Java dependency OSV audit'
+
+    & $python -m pip_audit -r (Join-Path $backendRoot 'ai-service\requirements.txt')
+    Assert-Success 'Python dependency audit'
+
+    Push-Location $frontRoot
+    try {
+        & pnpm audit --prod --audit-level high
+        Assert-Success 'Frontend production dependency audit'
+    } finally { Pop-Location }
+}
 
 if ($SkipSmoke) { return }
 
@@ -74,6 +99,7 @@ $tempDir = Join-Path $tempBase ('hs-quality-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 
 $backendProcess = $null
+$backendContainer = $null
 $frontProcess = $null
 $smokeSucceeded = $false
 $env:GATE_DB_PASSWORD = [Guid]::NewGuid().ToString('N')
@@ -81,6 +107,12 @@ $env:GATE_RABBIT_PASSWORD = [Guid]::NewGuid().ToString('N')
 $env:GATE_MINIO_PASSWORD = [Guid]::NewGuid().ToString('N')
 $env:SMOKE_USERNAME = 'gate_student'
 $env:SMOKE_PASSWORD = [Guid]::NewGuid().ToString('N')
+$env:TEACHER_USERNAME = 'gate_teacher'
+$env:TEACHER_PASSWORD = [Guid]::NewGuid().ToString('N')
+$env:COORDINATOR_USERNAME = 'gate_coordinator'
+$env:COORDINATOR_PASSWORD = [Guid]::NewGuid().ToString('N')
+$env:COORDINATOR2_USERNAME = 'gate_coordinator2'
+$env:COORDINATOR2_PASSWORD = [Guid]::NewGuid().ToString('N')
 $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $frontRoot '.playwright-browsers'
 $env:POSTGRES_DB_URL = 'jdbc:postgresql://localhost:15432/hs_quality'
 $env:POSTGRES_USER = 'hs_quality'
@@ -105,6 +137,12 @@ $dotenvLines = @(
     'JWT_REFRESH_EXPIRATION_DAYS=7'
     "STUDENT_USERNAME=$env:SMOKE_USERNAME"
     "STUDENT_PASSWORD=$env:SMOKE_PASSWORD"
+    "TEACHER_USERNAME=$env:TEACHER_USERNAME"
+    "TEACHER_PASSWORD=$env:TEACHER_PASSWORD"
+    "COORDINATOR_USERNAME=$env:COORDINATOR_USERNAME"
+    "COORDINATOR_PASSWORD=$env:COORDINATOR_PASSWORD"
+    "COORDINATOR2_USERNAME=$env:COORDINATOR2_USERNAME"
+    "COORDINATOR2_PASSWORD=$env:COORDINATOR2_PASSWORD"
     "ADMIN_USERNAME=$env:ADMIN_USERNAME"
     "ADMIN_PASSWORD=$env:ADMIN_PASSWORD"
 )
@@ -134,22 +172,59 @@ try {
 
     $jar = Join-Path $backendRoot 'target\hs-tesis-0.0.1-SNAPSHOT.jar'
     if (-not (Test-Path -LiteralPath $jar)) { throw "Missing backend jar: $jar" }
-    $backendProcess = Start-Process -FilePath (Get-Command java).Source -ArgumentList @('-jar', ('"' + $jar + '"'), '--server.port=8080') -WorkingDirectory $tempDir -RedirectStandardOutput (Join-Path $tempDir 'backend.out.log') -RedirectStandardError (Join-Path $tempDir 'backend.err.log') -WindowStyle Hidden -PassThru
-    Wait-Http 'http://localhost:8080/api/v1/auth/me' $backendProcess
+    if ($DockerBackend) {
+        $containerEnvFile = Join-Path $tempDir 'backend-container.env'
+        [IO.File]::WriteAllLines($containerEnvFile, [string[]]@(
+            'POSTGRES_DB_URL=jdbc:postgresql://postgres:5432/hs_quality'
+            'POSTGRES_USER=hs_quality'
+            "POSTGRES_PASSWORD=$env:GATE_DB_PASSWORD"
+            'MINIO_URL=http://minio:9000'
+            'MINIO_ROOT_USER=hs_quality'
+            "MINIO_ROOT_PASSWORD=$env:GATE_MINIO_PASSWORD"
+            'MINIO_BUCKET_NAME=hs-quality'
+            'RABBITMQ_HOST=rabbitmq'
+            'RABBITMQ_AMQP_PORT=5672'
+            'RABBITMQ_USER=hs_quality'
+            "RABBITMQ_PASSWORD=$env:GATE_RABBIT_PASSWORD"
+            'PYTHON_WORKER_BASE_URL=http://host.docker.internal:18000'
+            "WORKER_API_KEY=$env:WORKER_API_KEY"
+            "ADMIN_USERNAME=$env:ADMIN_USERNAME"
+            "ADMIN_PASSWORD=$env:ADMIN_PASSWORD"
+        ), [System.Text.UTF8Encoding]::new($false))
+        $backendContainer = "${project}-backend"
+        & docker run --detach --name $backendContainer --network "${project}_default" -p '127.0.0.1:8080:8080' -p '[::1]:8080:8080' --mount "type=bind,source=$jar,target=/app/app.jar,readonly" --mount "type=bind,source=$(Join-Path $tempDir '.env'),target=/app/.env,readonly" --env-file $containerEnvFile --workdir /app eclipse-temurin:21-jre java -jar /app/app.jar --server.port=8080 | Out-Null
+        Assert-Success 'Isolated Java backend container startup'
+    } else {
+        $backendProcess = Start-Process -FilePath (Get-Command java).Source -ArgumentList @('-jar', ('"' + $jar + '"'), '--server.port=8080') -WorkingDirectory $tempDir -RedirectStandardOutput (Join-Path $tempDir 'backend.out.log') -RedirectStandardError (Join-Path $tempDir 'backend.err.log') -WindowStyle Hidden -PassThru
+    }
+    Wait-Http 'http://localhost:8080/api/v1/auth/me' $backendProcess $backendContainer
 
     $ng = Join-Path $frontRoot 'node_modules\@angular\cli\bin\ng.js'
     $frontProcess = Start-Process -FilePath (Get-Command node).Source -ArgumentList @(('"' + $ng + '"'), 'serve', '--host', '127.0.0.1', '--port', '4200') -WorkingDirectory $frontRoot -RedirectStandardOutput (Join-Path $tempDir 'frontend.out.log') -RedirectStandardError (Join-Path $tempDir 'frontend.err.log') -WindowStyle Hidden -PassThru
-    Wait-Http 'http://127.0.0.1:4200/sign-in' $frontProcess
+    Wait-Http 'http://127.0.0.1:4200/sign-in' $frontProcess $null
 
     Push-Location $frontRoot
     try {
+        $env:PLAYWRIGHT_JUNIT_OUTPUT_FILE = Join-Path $tempDir 'playwright-junit.xml'
         & (Join-Path $frontRoot 'node_modules\.bin\playwright.cmd') install chromium
         Assert-Success 'Chromium installation'
         & (Join-Path $frontRoot 'node_modules\.bin\playwright.cmd') test
-        Assert-Success 'Browser login smoke test'
+        Assert-Success 'Browser critical journey suite'
     } finally { Pop-Location }
+    if ($RunLoad) {
+        & node (Join-Path $PSScriptRoot 'load-probe.mjs')
+        Assert-Success 'Bounded local performance probe'
+    }
     $smokeSucceeded = $true
 } finally {
+    if ($backendContainer) {
+        try {
+            & docker logs $backendContainer 2>&1 | Out-File -LiteralPath (Join-Path $tempDir 'backend.out.log') -Encoding utf8
+        } catch {
+            Write-Warning "Could not capture logs for smoke-test container ${backendContainer}: $($_.Exception.Message)"
+        }
+        & docker rm --force $backendContainer | Out-Null
+    }
     foreach ($process in @($frontProcess, $backendProcess)) {
         if ($process) {
             try {
@@ -175,6 +250,10 @@ try {
     $resolvedTemp = [IO.Path]::GetFullPath($tempDir)
     if ($resolvedTemp.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreCase) -and
         [IO.Path]::GetFileName($resolvedTemp).StartsWith('hs-quality-')) {
+        foreach ($secretName in @('.env', 'backend-container.env')) {
+            $secretPath = Join-Path $resolvedTemp $secretName
+            Remove-Item -LiteralPath $secretPath -Force -ErrorAction SilentlyContinue
+        }
         if ($smokeSucceeded) {
             $tempRemoved = $false
             for ($attempt = 0; $attempt -lt 5; $attempt++) {

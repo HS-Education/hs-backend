@@ -25,4 +25,9 @@ public class RabbitMqConfig {
         return QueueBuilder.durable("embeddings_ready_queue").build();
     }
 
+    @Bean
+    public Queue documentProcessingFailedQueue() {
+        return QueueBuilder.durable("document_processing_failed_queue").build();
+    }
+
 }

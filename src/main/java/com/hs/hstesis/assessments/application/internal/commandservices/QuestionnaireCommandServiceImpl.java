@@ -56,6 +56,10 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     @Override
     @Transactional
     public void handle(GenerateQuestionnaireCommand command) {
+        if (command.actorId() == null || !externalLearningService
+                .getTeacherAndCoordinatorIdsByCourseId(command.courseId()).contains(command.actorId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Teacher is not assigned to this course.");
+        }
         if (questionnaireRepository.existsByCourseIdAndGradingPeriodIdAndWeekNumber(
                 command.courseId(), command.gradingPeriodId(), command.weekNumber())) {
             throw new IllegalStateException("A questionnaire already exists for the specified week.");
@@ -128,6 +132,13 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     @Override
     @Transactional
     public void handle(com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
+        if (command.actorId() == null || !externalLearningService.getCoordinatedCourseIds(command.actorId())
+                .contains(command.courseId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Coordinator does not own this course.");
+        }
+        if (!externalLearningService.getStudentIdsByCourseId(command.courseId()).contains(command.studentId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Student is not enrolled in this course.");
+        }
         int numQuestions = command.numQuestions() != null ? command.numQuestions() : 10;
         var baseQuestions = questionRepository.findBaseQuestionsByTopicId(command.topicId());
         if (baseQuestions.isEmpty()) {
@@ -179,6 +190,9 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         if (instance.getStudentId() == null) {
             throw new IllegalArgumentException("Cannot submit base template questionnaire.");
         }
+        if (!instance.getStudentId().equals(command.actorId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Questionnaire instance belongs to another student.");
+        }
 
         var existingSubmission = submissionRepository.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(instance.getId(), instance.getStudentId());
         if (existingSubmission.isPresent()) {
@@ -186,6 +200,19 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         }
 
         var questions = questionRepository.findAllByQuestionnaireInstanceId(instance.getId());
+        if (questions.isEmpty()) {
+            throw new IllegalStateException("Questionnaire has no questions.");
+        }
+        var allowedQuestionIds = questions.stream().map(Question::getId).collect(java.util.stream.Collectors.toSet());
+        if (!allowedQuestionIds.containsAll(command.answers().keySet())) {
+            throw new IllegalArgumentException("Answers contain unknown question IDs.");
+        }
+        for (var question : questions) {
+            Integer selected = command.answers().get(question.getId());
+            if (selected != null && (selected < 0 || selected >= question.getOptions().size())) {
+                throw new IllegalArgumentException("Answer index is outside the available options.");
+            }
+        }
 
         int correctAnswers = 0;
         java.util.Map<Long, Integer> regularTotals = new java.util.HashMap<>();
