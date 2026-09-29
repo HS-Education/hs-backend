@@ -10,9 +10,13 @@ import com.hs.hstesis.repo.domain.exceptions.InvalidPdfUploadException;
 import com.hs.hstesis.repo.domain.model.aggregates.Document;
 import com.hs.hstesis.repo.domain.model.commands.SaveDocumentEmbeddingsCommand;
 import com.hs.hstesis.repo.domain.model.commands.UploadBulkDocumentsCommand;
+import com.hs.hstesis.repo.domain.model.commands.RetryDocumentProcessingCommand;
 import com.hs.hstesis.repo.domain.model.valueobjects.DocumentFormat;
+import com.hs.hstesis.repo.domain.model.valueobjects.DocumentStatus;
 import com.hs.hstesis.repo.domain.model.valueobjects.DocumentType;
 import com.hs.hstesis.repo.domain.model.valueobjects.ChunkEmbeddingData;
+import com.hs.hstesis.repo.domain.model.valueobjects.EducationLevel;
+import com.hs.hstesis.repo.domain.model.valueobjects.GradeLevel;
 import com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories.DocumentRepository;
 import com.hs.hstesis.repo.interfaces.rest.resources.UploadBulkDocumentMetadataResource;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,12 +80,27 @@ class DocumentCommandServiceImplTest {
         var document = new Document("Lesson", 7L, 11L, DocumentType.ACADEMIC,
                 DocumentFormat.PDF, "one.pdf", "object-1", "checksum-1");
         document.markAsFailed();
-        when(documents.findById(1L)).thenReturn(Optional.of(document));
+        when(documents.findByIdWithTargetsForUpdate(1L)).thenReturn(Optional.of(document));
 
         service.handle(new SaveDocumentEmbeddingsCommand(1L,
                 List.of(new ChunkEmbeddingData(1, 0, "Lesson text", new float[]{1f}))));
 
         verify(documents, never()).save(any());
         org.assertj.core.api.Assertions.assertThat(document.getStatus().name()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void retryingFailedDocumentSavesAggregateToPublishProcessingEvent() {
+        var document = new Document("Lesson", 7L, 11L, DocumentType.ACADEMIC,
+                DocumentFormat.PDF, "one.pdf", "object-1", "checksum-1");
+        document.addTargets(EducationLevel.SECONDARY, List.of(GradeLevel.SECOND), 10L);
+        document.markAsFailed();
+        when(documents.findByIdWithTargetsForUpdate(5L)).thenReturn(Optional.of(document));
+        when(learning.doesCoordinatorOwnCourse(7L, 10L)).thenReturn(true);
+
+        service.retryProcessing(new RetryDocumentProcessingCommand(10L, 5L));
+
+        org.assertj.core.api.Assertions.assertThat(document.getStatus()).isEqualTo(DocumentStatus.PROCESSING);
+        verify(documents, times(1)).save(document);
     }
 }

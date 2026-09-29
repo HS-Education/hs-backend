@@ -40,4 +40,21 @@ class DocumentLifecycleTest {
         ready.markAsFailed();
         assertThat(ready.getStatus()).isEqualTo(DocumentStatus.READY);
     }
+
+    @Test
+    void failedDocumentCanBeQueuedAgainAndProcessedIdempotently() {
+        Document document = document();
+        document.markAsProcessing();
+        document.markAsFailed();
+
+        assertThat(document.requestProcessingRetry()).isTrue();
+        assertThat(document.getStatus()).isEqualTo(DocumentStatus.PROCESSING);
+        document.markAsProcessing();
+        assertThat(document.getStatus()).isEqualTo(DocumentStatus.PROCESSING);
+
+        document.replaceChunks(List.of(new ChunkEmbeddingData(1, 0, "Recovered lesson text", new float[]{1f})));
+        document.markAsReady();
+        assertThat(document.getStatus()).isEqualTo(DocumentStatus.READY);
+        assertThat(document.requestProcessingRetry()).isFalse();
+    }
 }

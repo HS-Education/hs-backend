@@ -58,7 +58,7 @@ public class QuestionnaireController {
 
     @PostMapping("/{questionnaireInstanceId}/submit")
     @PreAuthorize("hasRole('STUDENT')")
-    public ResponseEntity<Void> submitQuestionnaire(
+    public ResponseEntity<com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireSubmissionResource> submitQuestionnaire(
             @PathVariable Long questionnaireInstanceId,
             @RequestBody SubmitQuestionnaireResource resource,
             org.springframework.security.core.Authentication authentication) {
@@ -66,8 +66,8 @@ public class QuestionnaireController {
                 authentication.getPrincipal();
         var command = SubmitQuestionnaireCommandFromResourceAssembler.toCommandFromResource(questionnaireInstanceId,
                 resource, userDetails.getId());
-        questionnaireCommandService.handle(command);
-        return new ResponseEntity<>(HttpStatus.CREATED);
+        var submission = questionnaireCommandService.handle(command);
+        return new ResponseEntity<>(toSubmissionResource(submission), HttpStatus.CREATED);
     }
 
     @PostMapping("/{questionnaireId}/start")
@@ -151,7 +151,23 @@ public class QuestionnaireController {
                     "Submission not found for this instance.");
         }
 
-        var submission = submissionOpt.get();
+        return ResponseEntity.ok(toSubmissionResource(submissionOpt.get()));
+    }
+
+    @PostMapping("/{questionnaireInstanceId}/feedback/retry")
+    @PreAuthorize("hasRole('STUDENT')")
+    public ResponseEntity<Void> retryQuestionnaireFeedback(
+            @PathVariable Long questionnaireInstanceId,
+            org.springframework.security.core.Authentication authentication) {
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                authentication.getPrincipal();
+        questionnaireCommandService.retryFeedback(new com.hs.hstesis.assessments.domain.model.commands.RetryQuestionnaireFeedbackCommand(
+                questionnaireInstanceId, userDetails.getId()));
+        return ResponseEntity.accepted().build();
+    }
+
+    private com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireSubmissionResource toSubmissionResource(
+            com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission submission) {
         var answerResources = submission.getAnswers().stream()
                 .map(a -> new com.hs.hstesis.assessments.interfaces.rest.resources.SubmissionAnswerResource(
                         a.getQuestion().getId(),
@@ -163,10 +179,10 @@ public class QuestionnaireController {
                         a.getAiFeedback()))
                 .collect(Collectors.toList());
 
-        var resource = new com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireSubmissionResource(
+        return new com.hs.hstesis.assessments.interfaces.rest.resources.QuestionnaireSubmissionResource(
                 submission.getScore(),
+                submission.getFeedbackStatus(),
                 answerResources);
-        return ResponseEntity.ok(resource);
     }
 
     @GetMapping("/submissions")

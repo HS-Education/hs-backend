@@ -5,6 +5,15 @@ import com.hs.hstesis.assessments.application.internal.outboundservices.ai.Exter
 import com.hs.hstesis.assessments.domain.model.commands.*;
 import com.hs.hstesis.assessments.domain.model.entities.Question;
 import com.hs.hstesis.assessments.domain.model.entities.QuestionnaireInstance;
+import com.hs.hstesis.assessments.domain.model.aggregates.Questionnaire;
+import com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission;
+import com.hs.hstesis.assessments.domain.model.valueobjects.QuestionDifficulty;
+import com.hs.hstesis.shared.domain.model.entities.AiBackgroundTask;
+import com.hs.hstesis.shared.domain.model.valueobjects.AiBackgroundTaskType;
+import com.hs.hstesis.shared.domain.model.valueobjects.QuestionnaireFeedbackStatus;
+import com.hs.hstesis.shared.infrastructure.persistence.jpa.repositories.AiBackgroundTaskRepository;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.ArgumentCaptor;
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
@@ -26,14 +35,15 @@ class QuestionnaireCommandServiceImplTest {
     private final ExternalRepoService repository = mock(ExternalRepoService.class);
     private final ExternalAiService ai = mock(ExternalAiService.class);
     private final ExternalNotificationService notifications = mock(ExternalNotificationService.class);
+    private final AiBackgroundTaskRepository aiTasks = mock(AiBackgroundTaskRepository.class);
     private final QuestionnaireCommandServiceImpl service = new QuestionnaireCommandServiceImpl(
-            questionnaires, instances, questions, remediation, submissions, learning, repository, ai, notifications);
+            questionnaires, instances, questions, remediation, submissions, learning, repository, ai, notifications, aiTasks);
 
     @Test
     void studentCannotSubmitAnotherStudentsInstance() {
         var instance = mock(QuestionnaireInstance.class);
         when(instance.getStudentId()).thenReturn(99L);
-        when(instances.findById(12L)).thenReturn(Optional.of(instance));
+        when(instances.findByIdForUpdate(12L)).thenReturn(Optional.of(instance));
 
         assertThatThrownBy(() -> service.handle(new SubmitQuestionnaireCommand(12L, Map.of(), 7L)))
                 .isInstanceOf(AccessDeniedException.class);
@@ -45,7 +55,7 @@ class QuestionnaireCommandServiceImplTest {
         var instance = mock(QuestionnaireInstance.class);
         when(instance.getStudentId()).thenReturn(7L);
         when(instance.getId()).thenReturn(12L);
-        when(instances.findById(12L)).thenReturn(Optional.of(instance));
+        when(instances.findByIdForUpdate(12L)).thenReturn(Optional.of(instance));
         var question = mock(Question.class);
         when(question.getId()).thenReturn(5L);
         when(question.getOptions()).thenReturn(List.of("A", "B", "C", "D"));
@@ -85,5 +95,74 @@ class QuestionnaireCommandServiceImplTest {
                 9L, 3L, 4L, 1, 5L, 10, 7L)))
                 .isInstanceOf(AccessDeniedException.class);
         verifyNoInteractions(questions, questionnaires, ai);
+    }
+
+    @Test
+    void submissionReturnsPersistedScoreAndQueuesFeedbackAndInsightWithoutCallingAiInline() {
+        var instance = mock(QuestionnaireInstance.class);
+        var questionnaire = mock(Questionnaire.class);
+        when(instance.getStudentId()).thenReturn(7L);
+        when(instance.getId()).thenReturn(12L);
+        when(instance.getQuestionnaire()).thenReturn(questionnaire);
+        when(questionnaire.getCourseId()).thenReturn(30L);
+        when(questionnaire.getWeekNumber()).thenReturn(4);
+        when(instances.findByIdForUpdate(12L)).thenReturn(Optional.of(instance));
+        when(submissions.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(12L, 7L))
+                .thenReturn(Optional.empty());
+
+        var correctOne = question(instance, 1L, 0);
+        var incorrect = question(instance, 2L, 0);
+        var correctTwo = question(instance, 3L, 0);
+        when(questions.findAllByQuestionnaireInstanceId(12L)).thenReturn(List.of(correctOne, incorrect, correctTwo));
+        when(remediation.findFirstByStudentIdAndCourseIdAndWeakTopicIdAndIsResolvedFalse(7L, 30L, 90L))
+                .thenReturn(Optional.empty());
+        when(submissions.saveAndFlush(any(QuestionnaireSubmission.class))).thenAnswer(invocation -> {
+            var submission = invocation.getArgument(0, QuestionnaireSubmission.class);
+            ReflectionTestUtils.setField(submission, "id", 500L);
+            return submission;
+        });
+
+        QuestionnaireSubmission submission = service.handle(
+                new SubmitQuestionnaireCommand(12L, Map.of(1L, 0, 2L, 1, 3L, 0), 7L));
+
+        assertThat(submission.getId()).isEqualTo(500L);
+        assertThat(submission.getScore()).isEqualTo(13);
+        assertThat(submission.getAnswers()).hasSize(3);
+        assertThat(submission.getFeedbackStatus()).isEqualTo(QuestionnaireFeedbackStatus.PENDING);
+        ArgumentCaptor<AiBackgroundTask> taskCaptor = ArgumentCaptor.forClass(AiBackgroundTask.class);
+        verify(aiTasks, times(2)).save(taskCaptor.capture());
+        assertThat(taskCaptor.getAllValues()).extracting(AiBackgroundTask::getTaskType)
+                .containsExactlyInAnyOrder(AiBackgroundTaskType.QUESTIONNAIRE_FEEDBACK,
+                        AiBackgroundTaskType.STUDENT_INSIGHT);
+        verify(ai, never()).generateFeedback(anyList());
+    }
+
+    @Test
+    void repeatedSubmissionReturnsExistingResultWithoutDuplicatingBackgroundTasks() {
+        var instance = mock(QuestionnaireInstance.class);
+        var existing = mock(QuestionnaireSubmission.class);
+        when(instance.getStudentId()).thenReturn(7L);
+        when(instance.getId()).thenReturn(12L);
+        when(instances.findByIdForUpdate(12L)).thenReturn(Optional.of(instance));
+        when(submissions.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(12L, 7L))
+                .thenReturn(Optional.of(existing));
+
+        assertThat(service.handle(new SubmitQuestionnaireCommand(12L, Map.of(), 7L))).isSameAs(existing);
+
+        verifyNoInteractions(questions, aiTasks, ai);
+        verify(submissions, never()).saveAndFlush(any());
+    }
+
+    private Question question(QuestionnaireInstance instance, Long id, int correctIndex) {
+        var question = mock(Question.class);
+        when(question.getId()).thenReturn(id);
+        when(question.getTopicId()).thenReturn(90L);
+        when(question.getText()).thenReturn("Synthetic question " + id);
+        when(question.getOptions()).thenReturn(List.of("Correct", "Incorrect", "Option C", "Option D"));
+        when(question.getCorrectOptionIndex()).thenReturn(correctIndex);
+        when(question.getIsRemedial()).thenReturn(false);
+        when(question.getQuestionnaireInstance()).thenReturn(instance);
+        when(question.getDifficulty()).thenReturn(QuestionDifficulty.INTERMEDIATE);
+        return question;
     }
 }

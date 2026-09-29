@@ -21,7 +21,7 @@ class DocumentStatusTransitionServiceTest {
         var document = new Document("Synthetic lesson", 1L, 2L, DocumentType.ACADEMIC,
                 DocumentFormat.PDF, "lesson.pdf", "documents/2/lesson.pdf", "checksum");
         document.markAsProcessing();
-        when(repository.findById(73L)).thenReturn(Optional.of(document));
+        when(repository.findByIdWithTargetsForUpdate(73L)).thenReturn(Optional.of(document));
 
         new DocumentStatusTransitionService(repository).markFailed(73L);
 

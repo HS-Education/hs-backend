@@ -109,4 +109,13 @@ public class DocumentController {
         return ResponseEntity.ok(new MessageResource("Document deleted successfully"));
     }
 
+    @PreAuthorize("hasRole('COORDINATOR')")
+    @Operation(description = "Retries AI processing for a failed document owned by the authenticated coordinator.")
+    @PostMapping("/{documentId}/retry-processing")
+    public ResponseEntity<Void> retryDocumentProcessing(@PathVariable Long courseId, @PathVariable Long documentId) {
+        documentCommandService.retryProcessing(new com.hs.hstesis.repo.domain.model.commands.RetryDocumentProcessingCommand(
+                courseId, documentId));
+        return ResponseEntity.accepted().build();
+    }
+
 }

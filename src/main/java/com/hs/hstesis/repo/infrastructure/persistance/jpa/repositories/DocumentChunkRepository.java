@@ -1,6 +1,7 @@
 package com.hs.hstesis.repo.infrastructure.persistance.jpa.repositories;
 
 import com.hs.hstesis.repo.domain.model.entities.DocumentChunk;
+import com.hs.hstesis.repo.domain.model.valueobjects.DocumentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -58,7 +59,9 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
             @Param("vector") String vector,
             @Param("limit") int limit);
 
-    List<DocumentChunk> findAllByDocumentTopicId(Long topicId);
+    @Query("SELECT c FROM DocumentChunk c WHERE c.document.topicId = :topicId AND c.document.status = :status")
+    List<DocumentChunk> findAllByDocumentTopicIdAndDocumentStatus(Long topicId, DocumentStatus status);
 
-    List<DocumentChunk> findAllByDocumentTopicIdIn(List<Long> topicIds);
+    @Query("SELECT c FROM DocumentChunk c WHERE c.document.topicId IN :topicIds AND c.document.status = :status")
+    List<DocumentChunk> findAllByDocumentTopicIdInAndDocumentStatus(List<Long> topicIds, DocumentStatus status);
 }

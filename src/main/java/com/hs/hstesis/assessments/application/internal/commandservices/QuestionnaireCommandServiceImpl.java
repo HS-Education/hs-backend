@@ -17,6 +17,11 @@ import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.Qu
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.QuestionnaireInstanceRepository;
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.QuestionnaireRepository;
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.RemedialTrackingRepository;
+import com.hs.hstesis.shared.domain.model.entities.AiBackgroundTask;
+import com.hs.hstesis.shared.domain.model.valueobjects.AiBackgroundTaskType;
+import com.hs.hstesis.shared.domain.model.valueobjects.AiBackgroundTaskStatus;
+import com.hs.hstesis.shared.domain.model.valueobjects.QuestionnaireFeedbackStatus;
+import com.hs.hstesis.shared.infrastructure.persistence.jpa.repositories.AiBackgroundTaskRepository;
 
 import java.util.List;
 
@@ -32,6 +37,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     private final ExternalRepoService externalRepoService;
     private final ExternalAiService externalAiService;
     private final ExternalNotificationService externalNotificationService;
+    private final AiBackgroundTaskRepository aiBackgroundTaskRepository;
 
     public QuestionnaireCommandServiceImpl(QuestionnaireRepository questionnaireRepository,
                                            QuestionnaireInstanceRepository instanceRepository,
@@ -41,7 +47,8 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
                                            ExternalLearningService externalLearningService,
                                            ExternalRepoService externalRepoService,
                                            ExternalAiService externalAiService,
-                                           ExternalNotificationService externalNotificationService) {
+                                           ExternalNotificationService externalNotificationService,
+                                           AiBackgroundTaskRepository aiBackgroundTaskRepository) {
         this.questionnaireRepository = questionnaireRepository;
         this.instanceRepository = instanceRepository;
         this.questionRepository = questionRepository;
@@ -51,6 +58,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         this.externalRepoService = externalRepoService;
         this.externalAiService = externalAiService;
         this.externalNotificationService = externalNotificationService;
+        this.aiBackgroundTaskRepository = aiBackgroundTaskRepository;
     }
 
     @Override
@@ -183,8 +191,9 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
 
     @Override
     @org.springframework.transaction.annotation.Transactional
-    public void handle(com.hs.hstesis.assessments.domain.model.commands.SubmitQuestionnaireCommand command) {
-        var instance = instanceRepository.findById(command.questionnaireInstanceId())
+    public com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission handle(
+            com.hs.hstesis.assessments.domain.model.commands.SubmitQuestionnaireCommand command) {
+        var instance = instanceRepository.findByIdForUpdate(command.questionnaireInstanceId())
                 .orElseThrow(() -> new IllegalArgumentException("Questionnaire instance not found."));
 
         if (instance.getStudentId() == null) {
@@ -196,7 +205,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
 
         var existingSubmission = submissionRepository.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(instance.getId(), instance.getStudentId());
         if (existingSubmission.isPresent()) {
-            throw new IllegalArgumentException("Questionnaire instance is already submitted.");
+            return existingSubmission.get();
         }
 
         var questions = questionRepository.findAllByQuestionnaireInstanceId(instance.getId());
@@ -222,7 +231,6 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         java.util.List<com.hs.hstesis.assessments.application.internal.outboundservices.ai.ExternalAiService.WrongQuestionFeedbackDto> wrongAnswersList = new java.util.ArrayList<>();
         
         var submission = new com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission(instance, instance.getStudentId(), 0);
-        java.util.Map<Long, com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmissionAnswer> answerMap = new java.util.HashMap<>();
 
         for (var question : questions) {
             Integer submittedAnswer = command.answers().get(question.getId());
@@ -248,25 +256,27 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             }
             
             if (submittedAnswer != null) {
-                var ans = submission.addAnswer(question, submittedAnswer, isCorrect);
-                answerMap.put(question.getId(), ans);
+                submission.addAnswer(question, submittedAnswer, isCorrect);
             }
         }
 
         int score = (int) Math.round(((double) correctAnswers / questions.size()) * 20.0);
         submission.setScore(score);
         
-        if (!wrongAnswersList.isEmpty()) {
-            var feedbacks = externalAiService.generateFeedback(wrongAnswersList);
-            for (var fb : feedbacks) {
-                var ans = answerMap.get(fb.questionId());
-                if (ans != null) {
-                    ans.setAiFeedback(fb.feedback());
-                }
-            }
-        }
+        submission.markFeedbackPending();
+        if (wrongAnswersList.isEmpty()) submission.markFeedbackNotRequired();
 
-        submissionRepository.save(submission);
+        var persistedSubmission = submissionRepository.saveAndFlush(submission);
+        if (!wrongAnswersList.isEmpty()) {
+            aiBackgroundTaskRepository.save(new AiBackgroundTask(
+                    AiBackgroundTaskType.QUESTIONNAIRE_FEEDBACK,
+                    persistedSubmission.getId(),
+                    "QUESTIONNAIRE_FEEDBACK:" + persistedSubmission.getId()));
+        }
+        aiBackgroundTaskRepository.save(new AiBackgroundTask(
+                AiBackgroundTaskType.STUDENT_INSIGHT,
+                instance.getStudentId(),
+                "STUDENT_INSIGHT:" + persistedSubmission.getId()));
 
         if (score <= 10) {
             var courseId = instance.getQuestionnaire().getCourseId();
@@ -294,6 +304,29 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             createOrUpdateInitialRemediation(instance.getStudentId(), instance.getQuestionnaire().getCourseId(),
                     instance.getQuestionnaire().getWeekNumber(), entry.getKey(), topicScore);
         }
+
+        return persistedSubmission;
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public void retryFeedback(com.hs.hstesis.assessments.domain.model.commands.RetryQuestionnaireFeedbackCommand command) {
+        var submission = submissionRepository.findForUpdateByInstanceAndStudent(
+                        command.questionnaireInstanceId(), command.studentId())
+                .orElseThrow(() -> new IllegalArgumentException("Questionnaire submission not found."));
+        if (submission.getFeedbackStatus() != QuestionnaireFeedbackStatus.FAILED) {
+            throw new IllegalStateException("Only failed feedback can be retried.");
+        }
+
+        var task = aiBackgroundTaskRepository.findByIdempotencyKey("QUESTIONNAIRE_FEEDBACK:" + submission.getId())
+                .orElseThrow(() -> new IllegalStateException("Feedback task not found."));
+        if (task.getStatus() != AiBackgroundTaskStatus.FAILED) {
+            throw new IllegalStateException("Feedback task is not in a retryable state.");
+        }
+
+        task.retryManually();
+        submission.clearFeedback();
+        submission.markFeedbackPending();
     }
 
     @Override

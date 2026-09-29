@@ -9,4 +9,4 @@ public record DocumentResource(Long id,
                                DocumentFormat format,
                                String originalFileName,
                                java.util.Date createdAt,
-                               DocumentStatus status) {}
+                               @com.fasterxml.jackson.annotation.JsonProperty("document_status") DocumentStatus status) {}
