@@ -65,10 +65,6 @@ public class AreaController {
         var getAllAreasQuery = new GetAllAreasQuery();
         var areas = areaQueryService.handle(getAllAreasQuery);
 
-        if (areas.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
         var areaResources = areas.stream()
             .map(AreaResourceFromQueryModelAssembler::toResourceFromQueryModel)
             .toList();
