@@ -88,9 +88,15 @@ public final class PdfUploadValidator {
     private void validateName(String name) {
         if (name == null || name.length() > 200 || name.isBlank()
                 || !name.toLowerCase(Locale.ROOT).endsWith(".pdf")
-                || name.contains("..") || name.matches(".*[\\\\/:*?\"<>|].*")
+                || name.contains("..") || name.codePoints().anyMatch(PdfUploadValidator::isForbiddenFileNameCharacter)
                 || name.codePoints().anyMatch(Character::isISOControl))
             throw new InvalidPdfUploadException();
+    }
+
+    private static boolean isForbiddenFileNameCharacter(int character) {
+        return character == '/' || character == '\\' || character == ':' || character == '*'
+                || character == '?' || character == '"' || character == '<' || character == '>'
+                || character == '|';
     }
 
     private void inspect(COSBase root) throws IOException {

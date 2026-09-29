@@ -77,7 +77,8 @@ class PdfUploadValidatorTest {
     @Test
     void rejectsUnsafeNameMimeAndMetadataMismatch() throws Exception {
         byte[] bytes = pdf(false, false);
-        for (String name : new String[] {"../course.pdf", "evil.exe", "a\\b.pdf"}) {
+        for (String name : new String[] {"../course.pdf", "evil.exe", "a\\b.pdf", "a:b.pdf", "a*b.pdf",
+                "a?b.pdf", "a\"b.pdf", "a<b.pdf", "a>b.pdf", "a|b.pdf"}) {
             assertThatThrownBy(() -> validator.validate(file(bytes, name, "application/pdf"), name))
                     .isInstanceOf(InvalidPdfUploadException.class);
         }
