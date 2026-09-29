@@ -53,7 +53,7 @@ public class GradingPeriodCommandServiceImpl implements GradingPeriodCommandServ
         }
 
         long weeks = ChronoUnit.WEEKS.between(command.startDate(), command.endDate());
-        if (weeks < 7) {
+        if (weeks < 3) {
             throw new GradingPeriodDurationTooShortException(weeks);
         }
 

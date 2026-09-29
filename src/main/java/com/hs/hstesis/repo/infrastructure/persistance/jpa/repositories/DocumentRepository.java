@@ -4,6 +4,8 @@ import com.hs.hstesis.repo.domain.model.aggregates.Document;
 import com.hs.hstesis.repo.domain.model.valueobjects.EducationLevel;
 import com.hs.hstesis.repo.domain.model.valueobjects.GradeLevel;
 import org.springframework.data.jpa.repository.JpaRepository;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -12,6 +14,8 @@ import java.util.Optional;
 
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
+    long countByTopicId(Long topicId);
+
     @Query("""
      SELECT DISTINCT d
      FROM Document d
@@ -19,7 +23,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      WHERE t.id.courseId = :courseId
        AND t.id.educationLevel = :educationLevel
        AND t.id.gradeLevel = :gradeLevel
-       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
+       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY', 'FAILED')
     """)
     List<Document> findAccessibleDocuments(Long courseId, EducationLevel educationLevel, GradeLevel gradeLevel);
 
@@ -28,7 +32,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      FROM Document d
      JOIN d.targets t
      WHERE t.id.courseId = :courseId
-       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
+       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY', 'FAILED')
     """)
     List<Document> findAllByCourseId(Long courseId);
 
@@ -37,7 +41,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      FROM Document d
      JOIN d.targets t
      WHERE t.id.courseId IN :courseIds
-       AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
+       AND d.status = 'READY'
     """)
     List<Document> findAllByCourseIdIn(List<Long> courseIds);
 
@@ -46,9 +50,13 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
         FROM Document d
         LEFT JOIN FETCH d.targets t
         WHERE d.id = :documentId
-          AND d.status IN ('UPLOADED', 'PROCESSING', 'READY')
+          AND d.status IN ('UPLOADED', 'PROCESSING', 'READY', 'FAILED')
     """)
     Optional<Document> findByIdWithTargets(Long documentId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Document d WHERE d.id = :documentId")
+    Optional<Document> findByIdWithTargetsForUpdate(Long documentId);
 
     @Query("""
         SELECT d

@@ -33,7 +33,9 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     @Transactional
     public RefreshToken createRefreshToken(Long userId) {
-        var user = userRepository.findById(userId)
+        // Serialize refresh-token replacement per user across backend instances.
+        // Without the row lock two sign-ins can both delete then insert and one fails the unique user_id constraint.
+        var user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
 
         refreshTokenRepository.deleteByUser(user);

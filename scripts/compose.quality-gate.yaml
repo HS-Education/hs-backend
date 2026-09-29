@@ -1,0 +1,49 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: hs_quality
+      POSTGRES_USER: hs_quality
+      POSTGRES_PASSWORD: ${GATE_DB_PASSWORD:?required}
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - ../db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hs_quality -d hs_quality"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: hs_quality
+      RABBITMQ_DEFAULT_PASS: ${GATE_RABBIT_PASSWORD:?required}
+    ports:
+      - "127.0.0.1:15673:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: minio/minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: hs_quality
+      MINIO_ROOT_PASSWORD: ${GATE_MINIO_PASSWORD:?required}
+    ports:
+      - "127.0.0.1:19000:9000"
+
+  clamav:
+    image: clamav/clamav:stable
+    profiles: ["malware"]
+    ports:
+      - "127.0.0.1:13310:3310"
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping", "1"]
+      interval: 5s
+      timeout: 5s
+      retries: 36

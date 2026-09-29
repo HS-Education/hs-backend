@@ -43,6 +43,18 @@ compose.yaml
 ### AI Service ###
 ai-service/*
 !ai-service/main.py
+!ai-service/openrouter_contract.py
+!ai-service/safety.py
+!ai-service/requirements.txt
+!ai-service/tests/
+ai-service/tests/*
+!ai-service/tests/test_*.py
+!ai-service/tests/live_openrouter.py
+!ai-service/tests/live_prompt_injection.py
+!ai-service/tests/live_worker_routes.py
 
 ### Database ###
-db
+db/*
+!db/init/
+db/init/*
+!db/init/01_init.sql

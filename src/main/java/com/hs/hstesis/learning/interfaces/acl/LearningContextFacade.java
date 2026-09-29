@@ -79,12 +79,18 @@ public class LearningContextFacade {
     }
     public List<Long> getEnrolledCourseIds(Long userId) {
         if (userId == null) return List.of();
-        
-        var classrooms = classroomQueryService.handle(new GetClassroomsByUserIdQuery(userId));
-        return classrooms.stream()
-                .map(c -> c.getCourse().getId())
-                .distinct()
-                .toList();
+
+        return enrollmentQueryService.handle(new GetEnrolledCourseIdsByUserIdQuery(userId));
+    }
+
+    public List<Long> getCoordinatedCourseIds(Long userId) {
+        if (userId == null) return List.of();
+
+        return areaQueryService.handle(new GetAreaByCoordinatorIdQuery(userId))
+                .map(area -> courseQueryService.handle(new GetCoursesByAreaIdQuery(area.area().getId())).stream()
+                        .map(Course::getId)
+                        .toList())
+                .orElse(List.of());
     }
 
     public Optional<com.hs.hstesis.learning.interfaces.acl.dto.GradingPeriodData> getGradingPeriodByCourseAndBimester(Long courseId, String bimester) {
@@ -152,6 +158,40 @@ public class LearningContextFacade {
                 .flatMap(classroom -> getStudentsByClassroom(classroom.getId()).stream())
                 .distinct()
                 .toList();
+    }
+
+    public boolean canViewClassroomProgress(Long userId, Long classroomId) {
+        if (userId == null || classroomId == null) return false;
+        var classroom = classroomQueryService.handle(new GetClassroomByIdQuery(classroomId));
+        if (classroom.isEmpty()) return false;
+        if (doesCoordinatorOwnCourse(userId, classroom.get().getCourse().getId())) return true;
+        return enrollmentQueryService.handle(new GetClassroomMembersQuery(classroomId)).stream()
+                .anyMatch(member -> userId.equals(member.userId()) && "TEACHER".equals(member.roleInClassroom()));
+    }
+
+    public List<Long> getTeacherAndCoordinatorIdsByCourseId(Long courseId) {
+        if (courseId == null) return List.of();
+        var course = courseQueryService.handle(new GetCourseByIdQuery(courseId));
+        if (course.isEmpty()) return List.of();
+
+        var recipientIds = new java.util.LinkedHashSet<Long>();
+        var coordinatorId = course.get().getArea().getCoordinatorId();
+        if (coordinatorId != null) recipientIds.add(coordinatorId);
+
+        getClassroomsByCourseId(courseId).forEach(classroom ->
+                enrollmentQueryService.handle(new GetClassroomMembersQuery(classroom.getId())).stream()
+                        .filter(member -> "TEACHER".equals(member.roleInClassroom()))
+                        .map(com.hs.hstesis.learning.application.querymodels.EnrollmentQueryModel::userId)
+                        .forEach(recipientIds::add));
+        return recipientIds.stream().toList();
+    }
+
+    public Optional<String> getStudentNameByCourseId(Long courseId, Long studentId) {
+        if (courseId == null || studentId == null) return Optional.empty();
+        return getStudentsByCourseId(courseId).stream()
+                .filter(student -> student.userId().equals(studentId))
+                .map(com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData::userName)
+                .findFirst();
     }
 
     public Optional<Long> getCourseIdByClassroomId(Long classroomId) {

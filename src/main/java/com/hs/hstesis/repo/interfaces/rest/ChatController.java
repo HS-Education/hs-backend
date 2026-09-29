@@ -165,20 +165,26 @@ public class ChatController {
         response.setHeader("Cache-Control", "no-cache");
         
         var outputStream = response.getOutputStream();
+        var clientConnected = new java.util.concurrent.atomic.AtomicBoolean(true);
         
         chatService.streamMessageResponse(sessionId, userId, request.question(),
             token -> {
+                if (!clientConnected.get()) return;
                 try {
                     outputStream.write(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                     outputStream.flush();
                 } catch (java.io.IOException e) {
-                    throw new RuntimeException(e);
+                    // El usuario puede maximizar/cerrar el bubble durante el streaming.
+                    // La respuesta de IA debe terminar y persistirse aunque ya no haya cliente conectado.
+                    clientConnected.set(false);
                 }
             },
             () -> {
-                try {
-                    outputStream.flush();
-                } catch (java.io.IOException ignored) {}
+                if (clientConnected.get()) {
+                    try {
+                        outputStream.flush();
+                    } catch (java.io.IOException ignored) {}
+                }
             },
             error -> {
                 error.printStackTrace();

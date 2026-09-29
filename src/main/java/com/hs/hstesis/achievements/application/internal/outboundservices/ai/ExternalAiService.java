@@ -6,11 +6,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
 @Service("achievementsExternalAiService")
 public class ExternalAiService {
+    private static final Logger log = LoggerFactory.getLogger(ExternalAiService.class);
 
     private final RestTemplate restTemplate;
 
@@ -24,7 +27,7 @@ public class ExternalAiService {
         this.restTemplate = restTemplate;
     }
 
-    public String generateInsight(String performanceJsonData, String targetAudience, String targetName, String docsContext) {
+    public String generateInsight(String performanceJsonData, String targetAudience, String studentCode, String docsContext) {
         String url = aiServiceUrl + "/generate";
 
         HttpHeaders headers = new HttpHeaders();
@@ -35,9 +38,9 @@ public class ExternalAiService {
 
         String audienceInstructions = "";
         if ("estudiante".equals(targetAudience)) {
-            audienceInstructions = "Dirígete explícitamente al estudiante por su nombre (" + targetName + "). Por ejemplo: 'Hola " + targetName + ", ...'. Si el estudiante tiene calificaciones bajas (menores o iguales a 13 o 60%), debes darle recomendaciones globales directas: dile qué temas exactos debe estudiar, qué conceptos debe repasar y dale sugerencias prácticas de mejora que él podría aplicar. Por el contrario, si el estudiante tiene calificaciones altas (mayores o iguales a 16 u 80%), dale recomendaciones muy positivas, motívalo a seguir así y explícitamente NO recomiendes cuestionarios de repaso para estos casos sobresalientes.";
+            audienceInstructions = "Identifica al estudiante únicamente mediante su código de usuario (" + studentCode + "). No solicites, inventes ni reveles su nombre. Si el estudiante tiene calificaciones bajas (menores o iguales a 13 o 60%), debes darle recomendaciones globales directas: dile qué temas exactos debe estudiar, qué conceptos debe repasar y dale sugerencias prácticas de mejora que él podría aplicar. Por el contrario, si el estudiante tiene calificaciones altas (mayores o iguales a 16 u 80%), dale recomendaciones muy positivas, motívalo a seguir así y explícitamente NO recomiendes cuestionarios de repaso para estos casos sobresalientes.";
         } else if ("profesor".equals(targetAudience)) {
-            audienceInstructions = "Si hay alumnos con bajas calificaciones (menores o iguales a 13 o 60%), sugiere qué temas deben reforzar y RECUÉRDALE AL PROFESOR explícitamente que tiene la opción en el sistema de generar un 'Cuestionario de Repaso' personalizado para esos alumnos en esos temas. Sin embargo, para los alumnos con notas altas (mayores o iguales a 16 u 80%), dale recomendaciones positivas al profesor y aclara que a ellos NO se les debe generar cuestionarios de repaso.";
+            audienceInstructions = "Si hay alumnos con bajas calificaciones (menores o iguales a 13 o 60%), indica qué temas y conceptos deben reforzar y sugiere estrategias, actividades o materiales de apoyo que el profesor pueda aplicar. Para los alumnos con notas altas (mayores o iguales a 16 u 80%), ofrece recomendaciones positivas para mantener su progreso. No sugieras crear, gestionar ni asignar cuestionarios adicionales o de repaso.";
         } else if ("coordinador académico".equals(targetAudience)) {
             audienceInstructions = "Tus recomendaciones deben ser de observación directiva. Si el aula tiene buen rendimiento (promedio mayor o igual a 16 u 80%), felicita indicando algo como 'Dale un ojo a esta aula que está TOP, excelente trabajo' y aclara que no requieren intervención con cuestionarios. Si el aula o áreas están mal, advierte diciendo 'Ponle el ojo a esta aula/área, están bajos' y sugiere estrategias paulatinas de mejora.";
         }
@@ -62,10 +65,13 @@ public class ExternalAiService {
 
         try {
             GenerateResponse response = restTemplate.postForObject(url, entity, GenerateResponse.class);
-            return response != null ? response.answer() : "No se pudo generar el insight.";
+            if (response == null || response.answer() == null || response.answer().isBlank()) {
+                throw new IllegalStateException("AI returned an empty insight.");
+            }
+            return response.answer();
         } catch (Exception e) {
-            e.printStackTrace();
-            return "Error de conexión con el motor de Inteligencia Artificial.";
+            log.warn("AI insight generation request failed.");
+            throw new IllegalStateException("Error de conexión con el motor de Inteligencia Artificial.");
         }
     }
 

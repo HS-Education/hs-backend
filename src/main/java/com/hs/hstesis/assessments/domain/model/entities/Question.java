@@ -1,5 +1,6 @@
 package com.hs.hstesis.assessments.domain.model.entities;
 
+import com.hs.hstesis.assessments.domain.model.valueobjects.QuestionDifficulty;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,12 +39,18 @@ public class Question {
     @Column(nullable = false)
     private Boolean isRemedial;
 
-    public Question(QuestionnaireInstance questionnaireInstance, Long topicId, String text, List<String> options, Integer correctOptionIndex, Boolean isRemedial) {
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private QuestionDifficulty difficulty;
+
+    public Question(QuestionnaireInstance questionnaireInstance, Long topicId, String text, List<String> options,
+                    Integer correctOptionIndex, Boolean isRemedial, QuestionDifficulty difficulty) {
         this.questionnaireInstance = questionnaireInstance;
         this.topicId = topicId;
         this.text = text;
         this.options = options;
         this.correctOptionIndex = correctOptionIndex;
         this.isRemedial = isRemedial;
+        this.difficulty = difficulty;
     }
 }

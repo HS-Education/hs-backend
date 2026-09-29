@@ -6,9 +6,11 @@ import com.hs.hstesis.learning.domain.model.valueobjects.AcademicYearStatus;
 public record ClassroomResource(Long id,
                                 Long courseId,
                                 String courseName,
+                                String areaName,
                                 SectionResource section,
                                 Long academicYearId,
                                 Integer academicYearName,
                                 AcademicYearStatus academicYearStatus,
-                                ClassroomStatus status) {
+                                ClassroomStatus status,
+                                String teacherName) {
 }

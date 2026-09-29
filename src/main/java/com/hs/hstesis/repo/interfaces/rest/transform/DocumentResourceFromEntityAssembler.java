@@ -10,7 +10,9 @@ public class DocumentResourceFromEntityAssembler {
                 entity.getTitle(),
                 entity.getTopicId(),
                 entity.getFormat(),
-                entity.getFileStorageInfo().getOriginalFileName()
+                entity.getFileStorageInfo().getOriginalFileName(),
+                entity.getCreatedAt(),
+                entity.getStatus()
         );
     }
 }

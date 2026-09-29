@@ -19,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
@@ -31,13 +32,19 @@ public class AchievementController {
     private final AchievementQueryService achievementQueryService;
     private final AchievementCommandService achievementCommandService;
     private final AchievementInsightRepository achievementInsightRepository;
+    private final com.hs.hstesis.learning.interfaces.acl.LearningContextFacade learningContextFacade;
+    private final com.hs.hstesis.assessments.interfaces.acl.AssessmentsContextFacade assessmentsContextFacade;
 
     public AchievementController(AchievementQueryService achievementQueryService,
                                  AchievementCommandService achievementCommandService,
-                                 AchievementInsightRepository achievementInsightRepository) {
+                                 AchievementInsightRepository achievementInsightRepository,
+                                 com.hs.hstesis.learning.interfaces.acl.LearningContextFacade learningContextFacade,
+                                 com.hs.hstesis.assessments.interfaces.acl.AssessmentsContextFacade assessmentsContextFacade) {
         this.achievementQueryService = achievementQueryService;
         this.achievementCommandService = achievementCommandService;
         this.achievementInsightRepository = achievementInsightRepository;
+        this.learningContextFacade = learningContextFacade;
+        this.assessmentsContextFacade = assessmentsContextFacade;
     }
 
     @Operation(summary = "Get student performance and latest AI insight")
@@ -86,15 +93,25 @@ public class AchievementController {
 
     @Operation(summary = "Generate and save a new AI insight for a student")
     @PostMapping("/students/{studentId}/insights")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER', 'COORDINATOR')")
     public ResponseEntity<?> generateStudentInsight(
             @PathVariable Long studentId,
-            @RequestParam(defaultValue = "Estudiante") String studentName) {
+            org.springframework.security.core.Authentication authentication) {
         try {
-            var insight = achievementCommandService.handle(new GenerateStudentInsightCommand(studentId, studentName));
+            var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                    authentication.getPrincipal();
+            boolean isStudent = authentication.getAuthorities().stream()
+                    .anyMatch(authority -> authority.getAuthority().equals("ROLE_STUDENT"));
+            if (isStudent && !userDetails.getId().equals(studentId)) {
+                throw new org.springframework.security.access.AccessDeniedException("Students can only generate their own insight.");
+            }
+            var insight = achievementCommandService.handle(new GenerateStudentInsightCommand(studentId));
             return ResponseEntity.ok(java.util.Map.of(
                     "message", "Insight generado correctamente",
                     "insightText", insight.getInsightText()
             ));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
         }
@@ -108,16 +125,46 @@ public class AchievementController {
         
         var latestInsightOpt = achievementInsightRepository.findTopByEntityTypeAndEntityIdOrderByCreatedAtDesc("CLASSROOM", classroomId);
         String insightText = latestInsightOpt.map(i -> i.getInsightText()).orElse(null);
+        java.util.Date insightCreatedAt = latestInsightOpt.map(i -> i.getCreatedAt()).orElse(null);
 
-        return ResponseEntity.ok(ClassroomAchievementResourceFromEntityAssembler.toResourceFromEntity(performanceOpt.get(), insightText));
+        return ResponseEntity.ok(new ClassroomAchievementResource(performanceOpt.get(), insightText, insightCreatedAt));
+    }
+
+    @Operation(summary = "Get classroom questionnaire coverage and question-level progress")
+    @GetMapping("/classrooms/{classroomId}/progress-details")
+    @PreAuthorize("hasAnyRole('TEACHER', 'COORDINATOR')")
+    public ResponseEntity<java.util.List<com.hs.hstesis.assessments.interfaces.acl.dto.QuestionnaireProgressDto>>
+    getClassroomProgressDetails(@PathVariable Long classroomId,
+            org.springframework.security.core.Authentication authentication) {
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                authentication.getPrincipal();
+        if (!learningContextFacade.canViewClassroomProgress(userDetails.getId(), classroomId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Classroom progress is not available.");
+        }
+        var courseId = learningContextFacade.getCourseIdByClassroomId(classroomId)
+                .orElseThrow(() -> new com.hs.hstesis.shared.domain.exceptions.ResourceNotFoundException(
+                        "Classroom not found."));
+        var studentIds = learningContextFacade.getStudentsByClassroom(classroomId).stream()
+                .map(com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData::userId)
+                .collect(java.util.stream.Collectors.toSet());
+        return ResponseEntity.ok(assessmentsContextFacade.getCourseProgress(courseId, studentIds));
     }
 
     @Operation(summary = "Generate insight for classroom")
     @PostMapping("/classrooms/{classroomId}/insights")
-    public ResponseEntity<?> generateClassroomInsight(@PathVariable Long classroomId) {
+    @PreAuthorize("hasRole('TEACHER') and !hasRole('COORDINATOR')")
+    public ResponseEntity<?> generateClassroomInsight(@PathVariable Long classroomId,
+            org.springframework.security.core.Authentication authentication) {
         try {
+            var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                    authentication.getPrincipal();
+            if (!learningContextFacade.canViewClassroomProgress(userDetails.getId(), classroomId)) {
+                throw new org.springframework.security.access.AccessDeniedException("Classroom is not assigned to this teacher.");
+            }
             var insight = achievementCommandService.handle(new GenerateClassroomInsightCommand(classroomId));
             return ResponseEntity.ok(java.util.Map.of("insightText", insight.getInsightText()));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
         }
@@ -125,29 +172,51 @@ public class AchievementController {
 
     @Operation(summary = "Get area performance")
     @GetMapping("/areas/{areaId}")
-    public ResponseEntity<AreaAchievementResource> getAreaAchievements(@PathVariable Long areaId) {
+    @PreAuthorize("hasRole('COORDINATOR')")
+    public ResponseEntity<AreaAchievementResource> getAreaAchievements(@PathVariable Long areaId,
+            org.springframework.security.core.Authentication authentication) {
+        requireCoordinatorAreaAccess(areaId, authentication);
         Optional<com.hs.hstesis.achievements.domain.model.valueobjects.AreaPerformance> performanceOpt = achievementQueryService.handle(new com.hs.hstesis.achievements.domain.model.queries.GetAreaPerformanceQuery(areaId));
         if (performanceOpt.isEmpty()) return ResponseEntity.notFound().build();
         
         var latestInsightOpt = achievementInsightRepository.findTopByEntityTypeAndEntityIdOrderByCreatedAtDesc("AREA", areaId);
         String insightText = latestInsightOpt.map(i -> i.getInsightText()).orElse(null);
+        java.util.Date insightCreatedAt = latestInsightOpt.map(i -> i.getCreatedAt()).orElse(null);
 
-        return ResponseEntity.ok(AreaAchievementResourceFromEntityAssembler.toResourceFromEntity(performanceOpt.get(), insightText));
+        return ResponseEntity.ok(new AreaAchievementResource(performanceOpt.get(), insightText, insightCreatedAt));
     }
 
     @Operation(summary = "Generate insight for area")
     @PostMapping("/areas/{areaId}/insights")
-    public ResponseEntity<?> generateAreaInsight(@PathVariable Long areaId) {
+    @PreAuthorize("hasRole('COORDINATOR')")
+    public ResponseEntity<?> generateAreaInsight(@PathVariable Long areaId,
+            org.springframework.security.core.Authentication authentication) {
         try {
+            requireCoordinatorAreaAccess(areaId, authentication);
             var insight = achievementCommandService.handle(new com.hs.hstesis.achievements.domain.model.commands.GenerateAreaInsightCommand(areaId));
             return ResponseEntity.ok(java.util.Map.of("insightText", insight.getInsightText()));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
         }
     }
 
+    private void requireCoordinatorAreaAccess(Long areaId,
+            org.springframework.security.core.Authentication authentication) {
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                authentication.getPrincipal();
+        boolean authorized = learningContextFacade.getAreaById(areaId)
+                .map(area -> userDetails.getId().equals(area.area().getCoordinatorId()))
+                .orElse(false);
+        if (!authorized) {
+            throw new org.springframework.security.access.AccessDeniedException("Area is not assigned to this coordinator.");
+        }
+    }
+
     @Operation(summary = "Generate complementary recommendations (quiz) for a classroom based on AI")
     @PostMapping("/classrooms/{classroomId}/recommendations")
+    @PreAuthorize("hasRole('COORDINATOR')")
     public ResponseEntity<?> generateClassroomRecommendation(
             @PathVariable Long classroomId, 
             @RequestBody com.hs.hstesis.achievements.interfaces.rest.resources.GenerateRecommendationResource resource) {

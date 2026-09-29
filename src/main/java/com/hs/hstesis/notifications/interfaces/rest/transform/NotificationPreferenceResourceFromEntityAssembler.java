@@ -7,10 +7,9 @@ public class NotificationPreferenceResourceFromEntityAssembler {
     public static NotificationPreferenceResource toResourceFromEntity(NotificationPreference entity) {
         return new NotificationPreferenceResource(
                 entity.getUserId(),
-                entity.isNotifyQuizResults(),
-                entity.isNotifyRelevantActivity(),
-                entity.isNotifyNewDocument(),
-                entity.isNotifyUnresolvedQuizzes()
+                entity.isNotifyNewQuestionnaire(),
+                entity.isNotifyNewTutorial(),
+                entity.isNotifyLowPerformance()
         );
     }
 }

@@ -12,10 +12,16 @@ import com.hs.hstesis.assessments.application.internal.outboundservices.ai.Exter
 import com.hs.hstesis.assessments.domain.model.aggregates.Questionnaire;
 import com.hs.hstesis.assessments.domain.model.entities.Question;
 import com.hs.hstesis.assessments.domain.model.entities.QuestionnaireInstance;
+import com.hs.hstesis.assessments.domain.model.valueobjects.QuestionDifficulty;
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.QuestionRepository;
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.QuestionnaireInstanceRepository;
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.QuestionnaireRepository;
 import com.hs.hstesis.assessments.infrastructure.persistance.jpa.repositories.RemedialTrackingRepository;
+import com.hs.hstesis.shared.domain.model.entities.AiBackgroundTask;
+import com.hs.hstesis.shared.domain.model.valueobjects.AiBackgroundTaskType;
+import com.hs.hstesis.shared.domain.model.valueobjects.AiBackgroundTaskStatus;
+import com.hs.hstesis.shared.domain.model.valueobjects.QuestionnaireFeedbackStatus;
+import com.hs.hstesis.shared.infrastructure.persistence.jpa.repositories.AiBackgroundTaskRepository;
 
 import java.util.List;
 
@@ -31,6 +37,7 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
     private final ExternalRepoService externalRepoService;
     private final ExternalAiService externalAiService;
     private final ExternalNotificationService externalNotificationService;
+    private final AiBackgroundTaskRepository aiBackgroundTaskRepository;
 
     public QuestionnaireCommandServiceImpl(QuestionnaireRepository questionnaireRepository,
                                            QuestionnaireInstanceRepository instanceRepository,
@@ -40,7 +47,8 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
                                            ExternalLearningService externalLearningService,
                                            ExternalRepoService externalRepoService,
                                            ExternalAiService externalAiService,
-                                           ExternalNotificationService externalNotificationService) {
+                                           ExternalNotificationService externalNotificationService,
+                                           AiBackgroundTaskRepository aiBackgroundTaskRepository) {
         this.questionnaireRepository = questionnaireRepository;
         this.instanceRepository = instanceRepository;
         this.questionRepository = questionRepository;
@@ -50,25 +58,32 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         this.externalRepoService = externalRepoService;
         this.externalAiService = externalAiService;
         this.externalNotificationService = externalNotificationService;
+        this.aiBackgroundTaskRepository = aiBackgroundTaskRepository;
     }
 
     @Override
     @Transactional
     public void handle(GenerateQuestionnaireCommand command) {
-        // Permitir múltiples cuestionarios para la misma semana a petición del usuario.
+        if (command.actorId() == null || !externalLearningService
+                .getTeacherAndCoordinatorIdsByCourseId(command.courseId()).contains(command.actorId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Teacher is not assigned to this course.");
+        }
+        if (questionnaireRepository.existsByCourseIdAndGradingPeriodIdAndWeekNumber(
+                command.courseId(), command.gradingPeriodId(), command.weekNumber())) {
+            throw new IllegalStateException("A questionnaire already exists for the specified week.");
+        }
 
         var topic = externalLearningService.getTopicByCourseAndGradingPeriodAndOrderIndex(command.courseId(), command.gradingPeriodId(), command.weekNumber())
                 .orElseThrow(() -> new IllegalArgumentException("No topic found for the specified week number."));
 
-        int attempts = command.allowedAttempts() != null ? command.allowedAttempts() : 1;
-        if (attempts < 1) attempts = 1;
-        if (attempts > 3) attempts = 3;
+        // Los cuestionarios nuevos se publican con un único intento. Se conserva
+        // la columna allowedAttempts para que la política pueda reactivarse después.
+        int attempts = 1;
 
-        int questionsPerAttempt = command.questionsPerAttempt() != null ? command.questionsPerAttempt() : 10;
-        if (questionsPerAttempt < 1) questionsPerAttempt = 1;
+        int questionsPerAttempt = command.questionsPerAttempt() != null ? command.questionsPerAttempt() : 5;
+        if (questionsPerAttempt < 5) questionsPerAttempt = 5;
         if (questionsPerAttempt > 10) questionsPerAttempt = 10;
-
-        int totalQuestionsToGenerate = questionsPerAttempt * 3;
+        int bankQuestionCount = 15;
 
         var chunks = externalRepoService.getDocumentChunksByTopicIds(List.of(topic.getId()));
         if (chunks.isEmpty()) {
@@ -77,7 +92,20 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
 
         String contextText = String.join("\n\n", chunks);
 
-        var aiResponse = externalAiService.generateQuiz(contextText, topic.getName(), totalQuestionsToGenerate, false);
+        var aiResponse = externalAiService.generateQuiz(contextText, topic.getName(), bankQuestionCount, false);
+
+        if (aiResponse == null || aiResponse.questions() == null || aiResponse.questions().size() != bankQuestionCount) {
+            throw new IllegalStateException("AI did not generate the required 15-question bank.");
+        }
+        long lowQuestions = aiResponse.questions().stream()
+                .filter(q -> parseDifficulty(q.difficulty()) == QuestionDifficulty.LOW)
+                .count();
+        long intermediateQuestions = aiResponse.questions().stream()
+                .filter(q -> parseDifficulty(q.difficulty()) == QuestionDifficulty.INTERMEDIATE)
+                .count();
+        if (lowQuestions < 5 || intermediateQuestions < 10) {
+            throw new IllegalStateException("AI question bank must contain 5 LOW and 10 INTERMEDIATE questions.");
+        }
 
         var questionnaire = new Questionnaire(command.courseId(), command.gradingPeriodId(), command.weekNumber(), attempts, questionsPerAttempt);
         questionnaireRepository.save(questionnaire);
@@ -92,31 +120,40 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             java.util.Collections.shuffle(shuffledOptions);
             var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
 
-            var question = new Question(baseInstance, topic.getId(), q.text(), shuffledOptions, newCorrectIndex, false);
+            QuestionDifficulty difficulty = parseDifficulty(q.difficulty());
+            var question = new Question(baseInstance, topic.getId(), q.text(), shuffledOptions, newCorrectIndex, false, difficulty);
             questionRepository.save(question);
         }
 
         // Send notifications
         var studentIds = externalLearningService.getStudentIdsByCourseId(command.courseId());
-        String msg = String.format("¡Atención! Tienes un nuevo cuestionario pendiente para la semana %d en tu curso.", command.weekNumber());
+        String msg = String.format("Tienes un nuevo cuestionario disponible para la semana %d en tu curso.", command.weekNumber());
         for (Long sId : studentIds) {
-            externalNotificationService.sendNotification(sId, msg);
+            if (sId.equals(command.actorId())) continue;
+            externalNotificationService.sendNotification(
+                    sId,
+                    msg,
+                    com.hs.hstesis.notifications.domain.model.valueobjects.NotificationType.NEW_QUESTIONNAIRE);
         }
     }
 
     @Override
     @Transactional
     public void handle(com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
-        var chunks = externalRepoService.getDocumentChunksByTopicIds(List.of(command.topicId()));
-        if (chunks.isEmpty()) {
-            throw new IllegalStateException("No document chunks found for the specified topic.");
+        if (command.actorId() == null || !externalLearningService.getCoordinatedCourseIds(command.actorId())
+                .contains(command.courseId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Coordinator does not own this course.");
+        }
+        if (!externalLearningService.getStudentIdsByCourseId(command.courseId()).contains(command.studentId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Student is not enrolled in this course.");
+        }
+        int numQuestions = command.numQuestions() != null ? command.numQuestions() : 10;
+        var baseQuestions = questionRepository.findBaseQuestionsByTopicId(command.topicId());
+        if (baseQuestions.isEmpty()) {
+            throw new IllegalStateException("No base questions found for the specified topic.");
         }
 
-        String contextText = String.join("\n\n", chunks);
-
-        // Generate requested number of questions for remedial
-        int numQuestions = command.numQuestions() != null ? command.numQuestions() : 10;
-        var aiResponse = externalAiService.generateQuiz(contextText, "Remedial Topic " + command.topicId(), numQuestions, true);
+        java.util.Collections.shuffle(baseQuestions);
 
         var questionnaire = new Questionnaire(
                 command.courseId(), 
@@ -132,66 +169,85 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         var baseInstance = new QuestionnaireInstance(questionnaire, null);
         instanceRepository.save(baseInstance);
 
-        for (var q : aiResponse.questions()) {
-            var originalOptions = q.options();
-            var originalCorrectOption = originalOptions.get(q.correctOptionIndex());
+        for (var baseQuestion : baseQuestions.stream().limit(numQuestions).toList()) {
+            var originalOptions = baseQuestion.getOptions();
+            var originalCorrectOption = originalOptions.get(baseQuestion.getCorrectOptionIndex());
             var shuffledOptions = new java.util.ArrayList<>(originalOptions);
             java.util.Collections.shuffle(shuffledOptions);
             var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
 
-            var question = new Question(baseInstance, command.topicId(), q.text(), shuffledOptions, newCorrectIndex, true);
+            var question = new Question(baseInstance, baseQuestion.getTopicId(), baseQuestion.getText(), shuffledOptions,
+                    newCorrectIndex, true, effectiveDifficulty(baseQuestion));
             questionRepository.save(question);
         }
 
         // Send notification
         String msg = "¡Oportunidad de mejora! Se ha generado un nuevo cuestionario de repaso personalizado especialmente para ti.";
-        externalNotificationService.sendNotification(command.studentId(), msg);
+        externalNotificationService.sendNotification(
+                command.studentId(),
+                msg,
+                com.hs.hstesis.notifications.domain.model.valueobjects.NotificationType.NEW_QUESTIONNAIRE);
     }
 
     @Override
     @org.springframework.transaction.annotation.Transactional
-    public void handle(com.hs.hstesis.assessments.domain.model.commands.SubmitQuestionnaireCommand command) {
-        var instance = instanceRepository.findById(command.questionnaireInstanceId())
+    public com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission handle(
+            com.hs.hstesis.assessments.domain.model.commands.SubmitQuestionnaireCommand command) {
+        var instance = instanceRepository.findByIdForUpdate(command.questionnaireInstanceId())
                 .orElseThrow(() -> new IllegalArgumentException("Questionnaire instance not found."));
 
         if (instance.getStudentId() == null) {
             throw new IllegalArgumentException("Cannot submit base template questionnaire.");
         }
+        if (!instance.getStudentId().equals(command.actorId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Questionnaire instance belongs to another student.");
+        }
 
         var existingSubmission = submissionRepository.findFirstByQuestionnaireInstanceIdAndStudentIdOrderBySubmittedAtDesc(instance.getId(), instance.getStudentId());
         if (existingSubmission.isPresent()) {
-            throw new IllegalArgumentException("Questionnaire instance is already submitted.");
+            return existingSubmission.get();
         }
 
         var questions = questionRepository.findAllByQuestionnaireInstanceId(instance.getId());
+        if (questions.isEmpty()) {
+            throw new IllegalStateException("Questionnaire has no questions.");
+        }
+        var allowedQuestionIds = questions.stream().map(Question::getId).collect(java.util.stream.Collectors.toSet());
+        if (!allowedQuestionIds.containsAll(command.answers().keySet())) {
+            throw new IllegalArgumentException("Answers contain unknown question IDs.");
+        }
+        for (var question : questions) {
+            Integer selected = command.answers().get(question.getId());
+            if (selected != null && (selected < 0 || selected >= question.getOptions().size())) {
+                throw new IllegalArgumentException("Answer index is outside the available options.");
+            }
+        }
 
         int correctAnswers = 0;
-        java.util.Set<Long> failedTopics = new java.util.HashSet<>();
+        java.util.Map<Long, Integer> regularTotals = new java.util.HashMap<>();
+        java.util.Map<Long, Integer> regularCorrect = new java.util.HashMap<>();
+        java.util.Map<Long, Integer> remedialTotals = new java.util.HashMap<>();
+        java.util.Map<Long, Integer> remedialCorrect = new java.util.HashMap<>();
         java.util.List<com.hs.hstesis.assessments.application.internal.outboundservices.ai.ExternalAiService.WrongQuestionFeedbackDto> wrongAnswersList = new java.util.ArrayList<>();
         
         var submission = new com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmission(instance, instance.getStudentId(), 0);
-        java.util.Map<Long, com.hs.hstesis.assessments.domain.model.entities.QuestionnaireSubmissionAnswer> answerMap = new java.util.HashMap<>();
 
         for (var question : questions) {
             Integer submittedAnswer = command.answers().get(question.getId());
             boolean isCorrect = false;
+
+            var totals = question.getIsRemedial() ? remedialTotals : regularTotals;
+            totals.merge(question.getTopicId(), 1, Integer::sum);
             
             if (submittedAnswer != null && submittedAnswer.equals(question.getCorrectOptionIndex())) {
                 correctAnswers++;
                 isCorrect = true;
                 if (question.getIsRemedial()) {
-                    var trackings = remedialTrackingRepository.findAllByCourseIdAndIsResolvedFalse(instance.getQuestionnaire().getCourseId());
-                    for (var tracking : trackings) {
-                        if (tracking.getStudentId().equals(instance.getStudentId()) && tracking.getWeakTopicId().equals(question.getTopicId())) {
-                            tracking.markAsResolved();
-                            remedialTrackingRepository.save(tracking);
-                        }
-                    }
+                    remedialCorrect.merge(question.getTopicId(), 1, Integer::sum);
+                } else {
+                    regularCorrect.merge(question.getTopicId(), 1, Integer::sum);
                 }
             } else if (submittedAnswer != null) {
-                if (!question.getIsRemedial()) {
-                    failedTopics.add(question.getTopicId());
-                }
                 String studentAns = submittedAnswer < question.getOptions().size() ? question.getOptions().get(submittedAnswer) : "Desconocido";
                 String correctAns = question.getCorrectOptionIndex() < question.getOptions().size() ? question.getOptions().get(question.getCorrectOptionIndex()) : "Desconocido";
                 wrongAnswersList.add(new com.hs.hstesis.assessments.application.internal.outboundservices.ai.ExternalAiService.WrongQuestionFeedbackDto(
@@ -200,37 +256,77 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             }
             
             if (submittedAnswer != null) {
-                var ans = submission.addAnswer(question, submittedAnswer, isCorrect);
-                answerMap.put(question.getId(), ans);
+                submission.addAnswer(question, submittedAnswer, isCorrect);
             }
         }
 
         int score = (int) Math.round(((double) correctAnswers / questions.size()) * 20.0);
         submission.setScore(score);
         
+        submission.markFeedbackPending();
+        if (wrongAnswersList.isEmpty()) submission.markFeedbackNotRequired();
+
+        var persistedSubmission = submissionRepository.saveAndFlush(submission);
         if (!wrongAnswersList.isEmpty()) {
-            var feedbacks = externalAiService.generateFeedback(wrongAnswersList);
-            for (var fb : feedbacks) {
-                var ans = answerMap.get(fb.questionId());
-                if (ans != null) {
-                    ans.setAiFeedback(fb.feedback());
-                }
-            }
+            aiBackgroundTaskRepository.save(new AiBackgroundTask(
+                    AiBackgroundTaskType.QUESTIONNAIRE_FEEDBACK,
+                    persistedSubmission.getId(),
+                    "QUESTIONNAIRE_FEEDBACK:" + persistedSubmission.getId()));
+        }
+        aiBackgroundTaskRepository.save(new AiBackgroundTask(
+                AiBackgroundTaskType.STUDENT_INSIGHT,
+                instance.getStudentId(),
+                "STUDENT_INSIGHT:" + persistedSubmission.getId()));
+
+        if (score <= 10) {
+            var courseId = instance.getQuestionnaire().getCourseId();
+            var studentName = externalLearningService
+                    .getStudentNameByCourseId(courseId, instance.getStudentId())
+                    .orElse("el estudiante con ID " + instance.getStudentId());
+            var message = String.format(
+                    "Alerta de bajo rendimiento: %s obtuvo %d/20 en un cuestionario del curso.",
+                    studentName,
+                    score);
+            externalLearningService.getTeacherAndCoordinatorIdsByCourseId(courseId).forEach(recipientId ->
+                    externalNotificationService.sendNotification(
+                            recipientId,
+                            message,
+                            com.hs.hstesis.notifications.domain.model.valueobjects.NotificationType.LOW_PERFORMANCE));
         }
 
-        submissionRepository.save(submission);
-
-        if (score < 13) {
-            for (Long topicId : failedTopics) {
-                var tracking = new com.hs.hstesis.assessments.domain.model.entities.RemedialTracking(
-                        instance.getStudentId(),
-                        instance.getQuestionnaire().getCourseId(),
-                        instance.getQuestionnaire().getWeekNumber(),
-                        topicId
-                );
-                remedialTrackingRepository.save(tracking);
-            }
+        for (var entry : remedialTotals.entrySet()) {
+            int topicScore = scoreFor(remedialCorrect.getOrDefault(entry.getKey(), 0), entry.getValue());
+            updateExistingRemediation(instance.getStudentId(), instance.getQuestionnaire().getCourseId(), entry.getKey(), topicScore);
         }
+
+        for (var entry : regularTotals.entrySet()) {
+            int topicScore = scoreFor(regularCorrect.getOrDefault(entry.getKey(), 0), entry.getValue());
+            createOrUpdateInitialRemediation(instance.getStudentId(), instance.getQuestionnaire().getCourseId(),
+                    instance.getQuestionnaire().getWeekNumber(), entry.getKey(), topicScore);
+        }
+
+        return persistedSubmission;
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public void retryFeedback(com.hs.hstesis.assessments.domain.model.commands.RetryQuestionnaireFeedbackCommand command) {
+        var submission = submissionRepository.findForUpdateByInstanceAndStudent(
+                        command.questionnaireInstanceId(), command.studentId())
+                .orElseThrow(() -> new IllegalArgumentException("Questionnaire submission not found."));
+        if (submission.getFeedbackStatus() != QuestionnaireFeedbackStatus.FAILED) {
+            throw new IllegalStateException("Only failed feedback can be retried.");
+        }
+
+        var task = aiBackgroundTaskRepository.findByIdempotencyKey("QUESTIONNAIRE_FEEDBACK:" + submission.getId())
+                .orElseThrow(() -> new IllegalStateException("Feedback task not found."));
+        if (task.getStatus() != AiBackgroundTaskStatus.FAILED) {
+            throw new IllegalStateException("Feedback task is not in a retryable state.");
+        }
+
+        task.retryManually();
+        submission.clearFeedback();
+        submission.markFeedbackPending();
     }
 
     @Override
@@ -265,7 +361,9 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
         var baseInstance = instanceRepository.findByQuestionnaireIdAndStudentIdIsNull(command.questionnaireId())
                 .orElseThrow(() -> new IllegalStateException("Base template for this questionnaire not found."));
 
-        var allBaseQuestions = questionRepository.findAllByQuestionnaireInstanceId(baseInstance.getId());
+        var allBaseQuestions = questionRepository.findAllByQuestionnaireInstanceId(baseInstance.getId()).stream()
+                .filter(q -> effectiveDifficulty(q) == QuestionDifficulty.INTERMEDIATE)
+                .collect(java.util.stream.Collectors.toList());
         
         java.util.Collections.shuffle(allBaseQuestions);
         var selectedQuestions = allBaseQuestions.stream()
@@ -279,7 +377,14 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
             java.util.Collections.shuffle(shuffledOptions);
             var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
 
-            var clone = new Question(studentInstance, baseQ.getTopicId(), baseQ.getText(), shuffledOptions, newCorrectIndex, false);
+            var clone = new Question(
+                    studentInstance,
+                    baseQ.getTopicId(),
+                    baseQ.getText(),
+                    shuffledOptions,
+                    newCorrectIndex,
+                    baseQ.getIsRemedial(),
+                    effectiveDifficulty(baseQ));
             questionRepository.save(clone);
         }
 
@@ -289,29 +394,109 @@ public class QuestionnaireCommandServiceImpl implements QuestionnaireCommandServ
                 .collect(java.util.stream.Collectors.toList());
 
         for (var rem : studentRemedials) {
-            var weakTopicChunks = externalRepoService.getDocumentChunksByTopicIds(List.of(rem.getWeakTopicId()));
-            if (!weakTopicChunks.isEmpty()) {
-                String weakContext = String.join("\n\n", weakTopicChunks);
-                try {
-                    var remResponse = externalAiService.generateQuiz(weakContext, "Remedial Topic", 2, true);
-                    
-                    for (var rq : remResponse.questions()) {
-                        var originalOptions = rq.options();
-                        var originalCorrectOption = originalOptions.get(rq.correctOptionIndex());
+            var baseRemedialQuestions = questionRepository.findBaseQuestionsByTopicId(rem.getWeakTopicId());
+            java.util.Collections.shuffle(baseRemedialQuestions);
+
+            baseRemedialQuestions.stream()
+                    .filter(baseQuestion -> effectiveDifficulty(baseQuestion) == rem.effectiveDifficulty())
+                    .filter(baseQuestion -> selectedQuestions.stream()
+                            .noneMatch(selectedQuestion -> selectedQuestion.getId().equals(baseQuestion.getId())))
+                    .limit(rem.questionsToAssign())
+                    .forEach(baseQuestion -> {
+                        var originalOptions = baseQuestion.getOptions();
+                        var originalCorrectOption = originalOptions.get(baseQuestion.getCorrectOptionIndex());
                         var shuffledOptions = new java.util.ArrayList<>(originalOptions);
                         java.util.Collections.shuffle(shuffledOptions);
                         var newCorrectIndex = shuffledOptions.indexOf(originalCorrectOption);
 
-                        var rQuestion = new Question(studentInstance, rem.getWeakTopicId(), rq.text(), shuffledOptions, newCorrectIndex, true);
-                        questionRepository.save(rQuestion);
-                    }
-                } catch (Exception e) {
-                    // Log the error but don't fail the entire start process
-                    System.err.println("Failed to generate remedial questions for topic " + rem.getWeakTopicId() + ": " + e.getMessage());
-                }
-            }
+                        var remedialQuestion = new Question(
+                                studentInstance,
+                                baseQuestion.getTopicId(),
+                                baseQuestion.getText(),
+                                shuffledOptions,
+                                newCorrectIndex,
+                                true,
+                                effectiveDifficulty(baseQuestion));
+                        questionRepository.save(remedialQuestion);
+                    });
         }
 
         return studentInstance.getId();
+    }
+
+    private int scoreFor(int correct, int total) {
+        return total == 0 ? 0 : (int) Math.round(((double) correct / total) * 20.0);
+    }
+
+    private QuestionDifficulty effectiveDifficulty(Question question) {
+        return question.getDifficulty() != null ? question.getDifficulty() : QuestionDifficulty.INTERMEDIATE;
+    }
+
+    private QuestionDifficulty parseDifficulty(String difficulty) {
+        try {
+            return QuestionDifficulty.valueOf(difficulty.toUpperCase());
+        } catch (Exception ignored) {
+            return QuestionDifficulty.INTERMEDIATE;
+        }
+    }
+
+    private int remediationCountFor(int score) {
+        if (score <= 5) return 5;
+        if (score <= 10) return 4;
+        if (score <= 13) return 3;
+        if (score <= 15) return 2;
+        if (score <= 17) return 1;
+        return 0;
+    }
+
+    private QuestionDifficulty remediationDifficultyFor(int score) {
+        return score >= 14 ? QuestionDifficulty.INTERMEDIATE : QuestionDifficulty.LOW;
+    }
+
+    private void createOrUpdateInitialRemediation(Long studentId, Long courseId, Integer weekNumber,
+                                                   Long topicId, int topicScore) {
+        var existing = remedialTrackingRepository
+                .findFirstByStudentIdAndCourseIdAndWeakTopicIdAndIsResolvedFalse(studentId, courseId, topicId);
+        if (topicScore >= 18) {
+            existing.ifPresent(tracking -> {
+                tracking.markAsResolved();
+                tracking.setLastRemedialScore(topicScore);
+                remedialTrackingRepository.save(tracking);
+            });
+            return;
+        }
+
+        int count = remediationCountFor(topicScore);
+        var difficulty = remediationDifficultyFor(topicScore);
+        if (existing.isPresent()) {
+            var tracking = existing.get();
+            tracking.updateRemediation(topicScore, count, difficulty, count == 1 && difficulty == QuestionDifficulty.INTERMEDIATE);
+            remedialTrackingRepository.save(tracking);
+        } else {
+            var tracking = new com.hs.hstesis.assessments.domain.model.entities.RemedialTracking(
+                    studentId, courseId, weekNumber, topicId, count, difficulty);
+            tracking.setLastRemedialScore(topicScore);
+            tracking.setConsolidationMode(count == 1 && difficulty == QuestionDifficulty.INTERMEDIATE);
+            remedialTrackingRepository.save(tracking);
+        }
+    }
+
+    private void updateExistingRemediation(Long studentId, Long courseId, Long topicId, int remedialScore) {
+        remedialTrackingRepository
+                .findFirstByStudentIdAndCourseIdAndWeakTopicIdAndIsResolvedFalse(studentId, courseId, topicId)
+                .ifPresent(tracking -> {
+                    if (remedialScore >= 18) {
+                        tracking.setLastRemedialScore(remedialScore);
+                        tracking.markAsResolved();
+                    } else if (tracking.isInConsolidationMode()) {
+                        tracking.updateRemediation(remedialScore, 1, QuestionDifficulty.INTERMEDIATE, true);
+                    } else if (remedialScore >= 14) {
+                        tracking.updateRemediation(remedialScore, 1, QuestionDifficulty.INTERMEDIATE, true);
+                    } else {
+                        tracking.updateRemediation(remedialScore, remediationCountFor(remedialScore),
+                                QuestionDifficulty.LOW, false);
+                    }
+                    remedialTrackingRepository.save(tracking);
+                });
     }
 }

@@ -5,6 +5,7 @@ public record GenerateQuestionnaireCommand(
         Long gradingPeriodId,
         Integer weekNumber,
         Integer allowedAttempts,
-        Integer questionsPerAttempt
+        Integer questionsPerAttempt,
+        Long actorId
 ) {
 }

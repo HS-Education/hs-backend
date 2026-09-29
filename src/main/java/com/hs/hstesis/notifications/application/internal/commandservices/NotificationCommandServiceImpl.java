@@ -5,6 +5,7 @@ import com.hs.hstesis.notifications.domain.model.commands.CreateNotificationComm
 import com.hs.hstesis.notifications.domain.model.commands.MarkNotificationAsReadCommand;
 import com.hs.hstesis.notifications.domain.services.NotificationCommandService;
 import com.hs.hstesis.notifications.infrastructure.persistence.jpa.repositories.NotificationRepository;
+import com.hs.hstesis.notifications.infrastructure.brokers.rabbitmq.NotificationRealtimeRabbitAdapter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,16 +13,30 @@ import org.springframework.transaction.annotation.Transactional;
 public class NotificationCommandServiceImpl implements NotificationCommandService {
 
     private final NotificationRepository notificationRepository;
+    private final com.hs.hstesis.notifications.infrastructure.persistence.jpa.repositories.NotificationPreferenceRepository notificationPreferenceRepository;
+    private final NotificationRealtimeRabbitAdapter realtimeAdapter;
 
-    public NotificationCommandServiceImpl(NotificationRepository notificationRepository) {
+    public NotificationCommandServiceImpl(
+            NotificationRepository notificationRepository,
+            com.hs.hstesis.notifications.infrastructure.persistence.jpa.repositories.NotificationPreferenceRepository notificationPreferenceRepository,
+            NotificationRealtimeRabbitAdapter realtimeAdapter) {
         this.notificationRepository = notificationRepository;
+        this.notificationPreferenceRepository = notificationPreferenceRepository;
+        this.realtimeAdapter = realtimeAdapter;
     }
 
     @Override
     @Transactional
     public void handle(CreateNotificationCommand command) {
-        var notification = new Notification(command.userId(), command.message());
+        var preference = notificationPreferenceRepository.findByUserId(command.userId())
+                .orElseGet(() -> new com.hs.hstesis.notifications.domain.model.aggregates.NotificationPreference(command.userId()));
+        if (!preference.isEnabled(command.type())) {
+            return;
+        }
+        var notification = new Notification(command.userId(), command.message(), command.type());
         notificationRepository.save(notification);
+
+        realtimeAdapter.publish(notification);
     }
 
     @Override

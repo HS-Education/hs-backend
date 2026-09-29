@@ -21,7 +21,8 @@ public class RepoContextFacade {
     public List<String> getDocumentChunksByTopicIds(List<Long> topicIds) {
         if (topicIds == null || topicIds.isEmpty()) return List.of();
         
-        return documentChunkRepository.findAllByDocumentTopicIdIn(topicIds)
+        return documentChunkRepository.findAllByDocumentTopicIdInAndDocumentStatus(
+                        topicIds, com.hs.hstesis.repo.domain.model.valueobjects.DocumentStatus.READY)
                 .stream()
                 .map(DocumentChunk::getContent)
                 .toList();

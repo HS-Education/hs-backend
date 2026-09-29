@@ -14,6 +14,7 @@ public record AvailableQuestionnaireResource(
         Integer questionsPerAttempt,
         String type,
         List<QuestionnaireAttemptResource> pastAttempts,
-        String createdAt
+        String createdAt,
+        boolean informationalOnly
 ) {
 }

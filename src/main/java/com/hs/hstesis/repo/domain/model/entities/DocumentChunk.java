@@ -35,7 +35,7 @@ public class DocumentChunk {
     private Integer chunkIndex;
 
     @JdbcTypeCode(SqlTypes.VECTOR)
-    @Column(columnDefinition = "vector(768)")
+    @Column(columnDefinition = "vector(1024)")
     private float[] embedding;
 
     protected DocumentChunk() {}

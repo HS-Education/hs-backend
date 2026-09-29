@@ -83,8 +83,6 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
         );
     }
 
-    private static final int EMBEDDING_DIMENSION = 768;
-
     public void replaceChunks (List<ChunkEmbeddingData> chunkData) {
         if (chunkData == null || chunkData.isEmpty()) {
             throw new DocumentChunksRequiredException(this.getId());
@@ -111,7 +109,10 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
     }
 
     public void markAsProcessing() {
-        if (this.status != DocumentStatus.UPLOADED) {
+        if (this.status == DocumentStatus.PROCESSING || this.status == DocumentStatus.READY) {
+            return;
+        }
+        if (this.status != DocumentStatus.UPLOADED && this.status != DocumentStatus.FAILED) {
             throw new InvalidDocumentStatusTransitionException(this.status, DocumentStatus.PROCESSING);
         }
         this.status = DocumentStatus.PROCESSING;
@@ -127,7 +128,24 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
         this.status = DocumentStatus.READY;
     }
 
+    public void markAsFailed() {
+        if (this.status == DocumentStatus.FAILED || this.status == DocumentStatus.READY) {
+            return;
+        }
+        if (this.status != DocumentStatus.PROCESSING && this.status != DocumentStatus.UPLOADED) {
+            throw new InvalidDocumentStatusTransitionException(this.status, DocumentStatus.FAILED);
+        }
+        this.status = DocumentStatus.FAILED;
+    }
+
     public void confirmUpload() {
         this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey()));
+    }
+
+    public boolean requestProcessingRetry() {
+        if (this.status != DocumentStatus.FAILED) return false;
+        this.status = DocumentStatus.PROCESSING;
+        this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey()));
+        return true;
     }
 }

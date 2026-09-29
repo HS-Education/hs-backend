@@ -4,5 +4,6 @@ import com.hs.hstesis.achievements.domain.model.valueobjects.AreaPerformance;
 
 public record AreaAchievementResource(
         AreaPerformance performance,
-        String latestInsight
+        String latestInsight,
+        java.util.Date latestInsightCreatedAt
 ) {}

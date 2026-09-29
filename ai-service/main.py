@@ -2,34 +2,28 @@ import json
 import logging
 import threading
 import time
-from typing import Any
+from typing import Any, Literal
 import urllib.error
 import urllib.request
 
 import fitz
 import pika
-from fastapi import Depends, FastAPI, Header, HTTPException, status
-from fastapi.responses import StreamingResponse
+from safety import (
+    SYSTEM_PROMPT, UNTRUSTED_DATA_RULE, MAX_PDF_BYTES, MAX_REQUEST_CHARS,
+    CapacityExceeded, CapacityLimit, build_messages, extract_chunks, validate_embeddings, sse_token_frame,
+)
+from fastapi import Depends, FastAPI, Header, HTTPException, status, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import StreamingResponse, JSONResponse
 from minio import Minio
-from pydantic import BaseModel, Field
+from openrouter_contract import FEEDBACK_FORMAT, QUIZ_FORMAT, create_client
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from groq import Groq
-
-import sys
-import types
-if "transformers.onnx" not in sys.modules:
-    onnx_mod = types.ModuleType("transformers.onnx")
-    onnx_mod.OnnxConfig = type("OnnxConfig", (object,), {})
-    sys.modules["transformers.onnx"] = onnx_mod
-
-from transformers import AutoModel
-
-CHUNK_SIZE = 1000
-OVERLAP = 200
 
 DOCUMENT_PROCESSING_QUEUE = "document_processing_queue"
 EMBEDDINGS_READY_QUEUE = "embeddings_ready_queue"
-EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-es"
+DOCUMENT_PROCESSING_FAILED_QUEUE = "document_processing_failed_queue"
+provider_capacity = CapacityLimit(4)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,13 +44,28 @@ class Settings(BaseSettings):
     rabbitmq_user: str
     rabbitmq_password: str
     rabbitmq_port: str
-    groq_api_key: str
+    openrouter_api_key: str
+    openrouter_chat_model: str = "openai/gpt-oss-120b"
+    openrouter_embedding_model: str = "voyageai/voyage-4-lite"
+    openrouter_http_referer: str = "http://localhost:4200"
+    openrouter_app_title: str = "HS Education"
+    embedding_dimensions: int = 1024
 
 settings = Settings()
 
 
 class EmbedQueryRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=20000)
+    text: str = Field(default="", max_length=20000)
+    query: str | None = None
+    question: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_text_field(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("text"):
+                data["text"] = data.get("query") or data.get("question") or ""
+        return data
 
 class EmbedQueryResponse(BaseModel):
     model: str
@@ -64,15 +73,21 @@ class EmbedQueryResponse(BaseModel):
     embedding: list[float]
 
 class Message(BaseModel):
-    role: str
-    content: str
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=20000)
 
 class GenerateRequest(BaseModel):
-    messages: list[Message]
-    context_chunks: list[str] = Field(default_factory=list)
+    messages: list[Message] = Field(max_length=100)
+    context_chunks: list[str] = Field(default_factory=list, max_length=25)
     max_tokens: int = Field(default=2048, ge=64, le=4096)
     temperature: float = Field(default=0.2, ge=0.0, le=1.5)
     stream: bool = Field(default=False)
+
+    @model_validator(mode="after")
+    def bound_prompt(self):
+        if sum(len(m.content) for m in self.messages) + sum(len(c) for c in self.context_chunks) > MAX_REQUEST_CHARS:
+            raise ValueError("Request text is too large")
+        return self
 
 class GenerateResponse(BaseModel):
     model: str
@@ -83,18 +98,32 @@ class GenerateResponse(BaseModel):
 
 app = FastAPI(
     title="RAG Engine - AI Inference Worker",
-    version="1.0",
+    version="2.0",
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
 )
 
-logger.info("Loading " + EMBEDDING_MODEL + " model into memory...")
-model = AutoModel.from_pretrained(
-    EMBEDDING_MODEL,
-    trust_remote_code=True,
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning("Invalid request on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": "Invalid request payload"},
+    )
+
+logger.info(
+    "Initializing OpenRouter client with chat_model='%s' and embedding_model='%s' (dims=%d)...",
+    settings.openrouter_chat_model,
+    settings.openrouter_embedding_model,
+    settings.embedding_dimensions,
 )
-logger.info("Model loaded successfully")
+
+openai_client = create_client(
+    settings.openrouter_api_key,
+    settings.openrouter_http_referer,
+    settings.openrouter_app_title,
+)
 
 minio_client = Minio(
     settings.minio_endpoint,
@@ -111,91 +140,75 @@ def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
         )
 
 
+def get_embeddings(texts: list[str]) -> list[list[float]]:
+    """
+    Generates embeddings for a list of texts using the configured OpenRouter embedding model.
+    Handles batching if needed.
+    """
+    if not texts:
+        return []
+
+    # OpenRouter / OpenAI embeddings API call
+    with provider_capacity.acquire():
+        response = openai_client.embeddings.create(
+            model=settings.openrouter_embedding_model,
+            input=texts,
+            dimensions=settings.embedding_dimensions,
+        )
+    return validate_embeddings(response.data, len(texts), settings.embedding_dimensions)
+
+
 def process_document(ch, method, properties, body: bytes) -> None:
-    message: dict[str, Any] = json.loads(body)
-    document_id = message.get("documentId")
-    object_key = message.get("objectKey")
-
-    logger.info("Processing documentId=%s objectKey=%s", document_id, object_key)
-
+    document_id = None
     try:
-        t0_total = time.time()
-        
-        logger.info("-> Downloading document from MinIO...")
-        t0_download = time.time()
+        message = json.loads(body)
+        if not isinstance(message, dict):
+            raise ValueError("Invalid document message")
+        document_id = message.get("documentId")
+        object_key = message.get("objectKey")
+        if not isinstance(document_id, int) or document_id <= 0 or not isinstance(object_key, str) or not object_key.startswith("documents/"):
+            raise ValueError("Invalid document message")
+
         response = minio_client.get_object(
-            bucket_name=settings.minio_bucket_name,
-            object_name=object_key,
+            bucket_name=settings.minio_bucket_name, object_name=object_key,
         )
-        pdf_bytes = response.read()
-        response.close()
-        response.release_conn()
-        t1_download = time.time()
+        try:
+            pdf_bytes = response.read(MAX_PDF_BYTES + 1)
+        finally:
+            response.close()
+            response.release_conn()
+        chunks_metadata = extract_chunks(pdf_bytes)
+        for index in range(0, len(chunks_metadata), 50):
+            batch = chunks_metadata[index:index + 50]
+            embeddings = get_embeddings([chunk["content"] for chunk in batch])
+            for metadata, vector in zip(batch, embeddings, strict=True):
+                metadata["embedding"] = vector
 
-        logger.info("-> Extracting text and chunking...")
-        t0_extract = time.time()
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-
-        chunks_metadata: list[dict[str, Any]] = []
-        texts_to_encode: list[str] = []
-        chunk_index = 0
-
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            text = page.get_text().strip()
-            if not text:
-                continue
-
-            start = 0
-            while start < len(text):
-                end = min(start + CHUNK_SIZE, len(text))
-                chunk_text = text[start:end].strip()
-
-                if len(chunk_text) > 50:
-                    texts_to_encode.append(chunk_text)
-                    chunks_metadata.append(
-                        {
-                            "pageNumber": page_num + 1,
-                            "chunkIndex": chunk_index,
-                            "content": chunk_text,
-                        }
-                    )
-                    chunk_index += 1
-
-                start += (CHUNK_SIZE - OVERLAP)
-
-        doc.close()
-        t1_extract = time.time()
-
-        if texts_to_encode:
-            logger.info("-> Generating embeddings for %d chunks...", len(texts_to_encode))
-            t0_embed = time.time()
-            embeddings = model.encode(texts_to_encode).tolist()
-            for i, metadata in enumerate(chunks_metadata):
-                metadata["embedding"] = embeddings[i]
-            t1_embed = time.time()
-        else:
-            logger.info("No valid text chunks found; sending empty chunk list")
-
-        result_payload = {
-            "documentId": document_id,
-            "chunks": chunks_metadata,
-        }
-
-        ch.basic_publish(
-            exchange="",
-            routing_key=EMBEDDINGS_READY_QUEUE,
-            body=json.dumps(result_payload),
-            properties=pika.BasicProperties(delivery_mode=2),
-        )
-
+        result_payload = {"documentId": document_id, "chunks": chunks_metadata}
+        if ch.basic_publish(
+            exchange="", routing_key=EMBEDDINGS_READY_QUEUE,
+            body=json.dumps(result_payload), properties=pika.BasicProperties(delivery_mode=2),
+        ) is False:
+            raise RuntimeError("Embeddings publication was not confirmed")
         ch.basic_ack(delivery_tag=method.delivery_tag)
-        t1_total = time.time()
-        logger.info("Document %s processed successfully! [TOTAL TIME: %.3f seconds]", document_id, t1_total - t0_total)
-
-    except Exception:
-        logger.exception("Failed processing document %s", document_id)
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        logger.info("Document processing finished for documentId=%s chunks=%s", document_id, len(chunks_metadata))
+    except Exception as error:
+        logger.error("Document processing failed for documentId=%s errorType=%s", document_id, type(error).__name__)
+        if document_id is None:
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            return
+        try:
+            code = "DOCUMENT_INVALID" if isinstance(error, (ValueError, fitz.FileDataError)) else "PROCESSING_UNAVAILABLE"
+            if ch.basic_publish(
+                exchange="", routing_key=DOCUMENT_PROCESSING_FAILED_QUEUE,
+                body=json.dumps({"documentId": document_id, "errorCode": code}),
+                properties=pika.BasicProperties(delivery_mode=2),
+            ) is False:
+                raise RuntimeError("Failure publication was not confirmed")
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+        except Exception:
+            logger.error("Could not publish failure for documentId=%s; requeueing", document_id)
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
 
 def start_rabbitmq_consumer() -> None:
@@ -219,6 +232,8 @@ def start_rabbitmq_consumer() -> None:
 
             channel.queue_declare(queue=DOCUMENT_PROCESSING_QUEUE, durable=True)
             channel.queue_declare(queue=EMBEDDINGS_READY_QUEUE, durable=True)
+            channel.queue_declare(queue=DOCUMENT_PROCESSING_FAILED_QUEUE, durable=True)
+            channel.confirm_delivery()
 
             channel.basic_qos(prefetch_count=1)
             channel.basic_consume(
@@ -235,69 +250,60 @@ def start_rabbitmq_consumer() -> None:
 
 
 def build_system_prompt(context_chunks: list[str]) -> str:
-    if context_chunks:
-        context_text = "\n\n".join(
-            [f"[Contexto {i + 1}]\n{chunk}" for i, chunk in enumerate(context_chunks)]
+    # Retained for call sites; retrieved text is passed separately by build_messages.
+    return SYSTEM_PROMPT
+
+
+def call_openrouter_generate(system_prompt: str, messages: list[dict], max_tokens: int, temperature: float) -> dict:
+    llm_messages = [{"role": "system", "content": system_prompt}]
+    llm_messages.extend(messages)
+    
+    with provider_capacity.acquire():
+        completion = openai_client.chat.completions.create(
+            model=settings.openrouter_chat_model,
+            messages=llm_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            extra_body={"reasoning": {"effort": "low"}},
+            stream=False,
         )
-    else:
-        context_text = "No hay contexto proporcionado."
 
-    return (
-        "Eres Sery, un asistente académico cálido, amable y servicial.\n"
-        "Sigue estrictamente estas reglas:\n"
-        "1. Si el usuario simplemente te saluda (ej. 'Hola', 'Buenos días'), devuélvele el saludo cordialmente y ofrécele tu ayuda presentándote como Sery. NO hables sobre el contexto si solo te están saludando.\n"
-        "2. Si el usuario te hace una pregunta del curso, responde siempre con amabilidad basándote ÚNICAMENTE en el contexto proporcionado abajo. SIEMPRE debes incluir al final de tu respuesta el nombre de la 'Fuente' y el 'Enlace de descarga' exacto de donde sacaste la información (esa información viene dentro del contexto proporcionado).\n"
-        "3. Si hace una pregunta y la respuesta no está en el contexto, discúlpate amablemente y dile que no tienes información sobre ese tema específico en tus documentos. No inventes respuestas ni pongas enlaces falsos.\n"
-        "4. Si el usuario te pide explícitamente generar un cuestionario, examen o preguntas para evaluar, debes responder ÚNICAMENTE con un bloque de código JSON con `type: \"questionnaire_draft\"` y un arreglo `questions` que contenga `text`, `options` (array de strings) y `correctOptionIndex` (número). NO agregues ningún otro texto fuera del JSON.\n\n"
-        f"Contexto:\n{context_text}"
-    )
-
-
-def call_groq_generate(system_prompt: str, messages: list[dict], max_tokens: int, temperature: float) -> dict:
-    client = Groq(api_key=settings.groq_api_key)
-    
-    groq_messages = [{"role": "system", "content": system_prompt}]
-    groq_messages.extend(messages)
-    
-    completion = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=groq_messages,
-        temperature=temperature,
-        max_completion_tokens=max_tokens,
-        top_p=1,
-        reasoning_effort="medium",
-        stream=False,
-        stop=None
-    )
-    
-    answer = completion.choices[0].message.content or ""
+    choice = completion.choices[0]
+    answer = choice.message.content or ""
+    if getattr(choice, "finish_reason", None) == "length" or not answer.strip():
+        raise ValueError("OpenRouter returned an incomplete answer")
     return {
-        "model": "openai/gpt-oss-120b",
+        "model": settings.openrouter_chat_model,
         "answer": answer,
         "prompt_eval_count": completion.usage.prompt_tokens if hasattr(completion, "usage") and completion.usage else None,
         "eval_count": completion.usage.completion_tokens if hasattr(completion, "usage") and completion.usage else None,
     }
 
-def call_groq_generate_stream(system_prompt: str, messages: list[dict], max_tokens: int, temperature: float):
-    client = Groq(api_key=settings.groq_api_key)
+def call_openrouter_generate_stream(system_prompt: str, messages: list[dict], max_tokens: int, temperature: float):
+    llm_messages = [{"role": "system", "content": system_prompt}]
+    llm_messages.extend(messages)
     
-    groq_messages = [{"role": "system", "content": system_prompt}]
-    groq_messages.extend(messages)
-    
-    completion = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=groq_messages,
-        temperature=temperature,
-        max_completion_tokens=max_tokens,
-        top_p=1,
-        reasoning_effort="medium",
-        stream=True,
-        stop=None
-    )
-    
-    for chunk in completion:
-        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content is not None:
-            yield f"data: {chunk.choices[0].delta.content}\n\n"
+    with provider_capacity.acquire():
+        completion = openai_client.chat.completions.create(
+            model=settings.openrouter_chat_model,
+            messages=llm_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            extra_body={"reasoning": {"effort": "low"}},
+            stream=True,
+        )
+        finish_reason = None
+        for chunk in completion:
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            if choice.finish_reason is not None:
+                finish_reason = choice.finish_reason
+            if choice.delta and choice.delta.content is not None:
+                yield sse_token_frame(choice.delta.content)
+        if finish_reason != "stop":
+            logger.warning("OpenRouter stream did not finish normally (finish_reason=%s)", finish_reason)
+            return
     yield "data: [DONE]\n\n"
 
 
@@ -309,7 +315,12 @@ def startup_event() -> None:
 
 @app.get("/health", dependencies=[Depends(require_api_key)])
 def health_check() -> dict[str, str]:
-    return {"status": "ok", "model": EMBEDDING_MODEL}
+    return {
+        "status": "ok",
+        "chat_model": settings.openrouter_chat_model,
+        "embedding_model": settings.openrouter_embedding_model,
+        "dimensions": str(settings.embedding_dimensions),
+    }
 
 @app.post("/embed-query", response_model=EmbedQueryResponse, dependencies=[Depends(require_api_key)])
 def embed_query(payload: EmbedQueryRequest) -> EmbedQueryResponse:
@@ -321,17 +332,18 @@ def embed_query(payload: EmbedQueryRequest) -> EmbedQueryResponse:
         )
 
     try:
-        vector = model.encode([text])[0]
-        if hasattr(vector, "tolist"):
-            vector = vector.tolist()
+        embeddings = get_embeddings([text])
+        vector = embeddings[0]
 
         return EmbedQueryResponse(
-            model=EMBEDDING_MODEL,
+            model=settings.openrouter_embedding_model,
             dimensions=len(vector),
             embedding=vector,
         )
+    except CapacityExceeded:
+        raise HTTPException(status_code=503, detail="AI service is busy; retry shortly", headers={"Retry-After": "5"})
     except Exception:
-        logger.exception("Failed to generate query embedding")
+        logger.error("Failed to generate query embedding via OpenRouter")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to generate embedding",
@@ -341,50 +353,59 @@ def embed_query(payload: EmbedQueryRequest) -> EmbedQueryResponse:
 def generate_answer(payload: GenerateRequest) -> GenerateResponse:
     try:
         system_prompt = build_system_prompt(payload.context_chunks)
-        messages_dicts = [{"role": m.role, "content": m.content} for m in payload.messages]
+        messages_dicts = build_messages(payload.context_chunks, [m.model_dump() for m in payload.messages])[1:]
         
-        response_dict = call_groq_generate(
+        response_dict = call_openrouter_generate(
             system_prompt=system_prompt,
             messages=messages_dicts,
             max_tokens=payload.max_tokens,
-            temperature=payload.temperature
+            temperature=payload.temperature,
         )
         return GenerateResponse(**response_dict)
-    except Exception as e:
-        logger.exception("Error calling Groq API")
+    except CapacityExceeded:
+        raise HTTPException(status_code=503, detail="AI service is busy; retry shortly", headers={"Retry-After": "5"})
+    except Exception:
+        logger.error("OpenRouter generation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Groq API error: {str(e)}",
+            detail="AI response unavailable",
         )
 
 @app.post("/generate-stream", dependencies=[Depends(require_api_key)])
 def generate_answer_stream(payload: GenerateRequest) -> StreamingResponse:
     try:
         system_prompt = build_system_prompt(payload.context_chunks)
-        messages_dicts = [{"role": m.role, "content": m.content} for m in payload.messages]
+        messages_dicts = build_messages(payload.context_chunks, [m.model_dump() for m in payload.messages])[1:]
         
         return StreamingResponse(
-            call_groq_generate_stream(system_prompt, messages_dicts, payload.max_tokens, payload.temperature),
-            media_type="text/event-stream"
+            call_openrouter_generate_stream(system_prompt, messages_dicts, payload.max_tokens, payload.temperature),
+            media_type="text/event-stream",
         )
-    except Exception as e:
-        logger.exception("Error calling Groq API for stream")
+    except Exception:
+        logger.error("OpenRouter stream preparation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Groq API stream error: {str(e)}",
+            detail="AI response unavailable",
         )
 
 class GenerateQuizRequest(BaseModel):
-    context_text: str
-    topic_name: str
-    num_questions: int
+    context_text: str = Field(min_length=1, max_length=100_000)
+    topic_name: str = Field(min_length=1, max_length=200)
+    num_questions: int = Field(ge=1, le=30)
     is_remedial: bool
 
+    @model_validator(mode="after")
+    def require_nonblank_academic_context(self):
+        if not self.context_text.strip() or not self.topic_name.strip():
+            raise ValueError("Topic and context must not be blank")
+        return self
+
 class QuizQuestion(BaseModel):
-    text: str
-    options: list[str]
-    correctOptionIndex: int
+    text: str = Field(min_length=1)
+    options: list[str] = Field(min_length=4, max_length=4)
+    correctOptionIndex: int = Field(ge=0, le=3)
     isRemedial: bool
+    difficulty: Literal["LOW", "INTERMEDIATE"]
 
 class GenerateQuizResponse(BaseModel):
     questions: list[QuizQuestion]
@@ -392,12 +413,14 @@ class GenerateQuizResponse(BaseModel):
 @app.post("/generate-quiz", response_model=GenerateQuizResponse, dependencies=[Depends(require_api_key)])
 def generate_quiz(payload: GenerateQuizRequest) -> GenerateQuizResponse:
     try:
-        client = Groq(api_key=settings.groq_api_key)
-        
-        system_prompt = (
-            "You are an expert teacher. Generate a multiple choice quiz in Spanish based on the provided context.\n"
-            f"Topic: {payload.topic_name}\n"
-            f"Number of questions: {payload.num_questions}\n"
+        distribution_instruction = (
+            "For this 15-question bank, generate exactly 5 LOW questions and 10 INTERMEDIATE questions. "
+            if payload.num_questions == 15 else ""
+        )
+        system_prompt = UNTRUSTED_DATA_RULE + (
+            "You are an expert teacher. Generate a multiple choice quiz in Spanish based only on facts explicitly stated in the provided context.\n"
+            "Do not invent numbers, calculations, definitions or claims absent from that context.\n"
+            f"Generate exactly {payload.num_questions} questions; neither more nor fewer.\n"
             f"Is remedial (needs extra explanation focus): {payload.is_remedial}\n"
             "Return ONLY a JSON object with a list of questions under the key 'questions'.\n"
             "Each question MUST have:\n"
@@ -405,54 +428,82 @@ def generate_quiz(payload: GenerateQuizRequest) -> GenerateQuizResponse:
             "- 'options': A list of exactly 4 string options\n"
             "- 'correctOptionIndex': An integer from 0 to 3\n"
             f"- 'isRemedial': {str(payload.is_remedial).lower()}\n"
+            "- 'difficulty': either 'LOW' or 'INTERMEDIATE'\n"
+            f"{distribution_instruction}"
+            "LOW questions evaluate essential definitions and direct application; INTERMEDIATE questions "
+            "require interpretation, comparison or multi-step application.\n"
         )
         
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Context: {payload.context_text}\n\nGenerate the JSON now."}
+            {"role": "user", "content": json.dumps({"untrusted_topic": payload.topic_name, "untrusted_context": payload.context_text}, ensure_ascii=False)}
         ]
         
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=messages,
-            response_format={"type": "json_object"},
-            temperature=0.2,
-        )
+        with provider_capacity.acquire():
+            completion = openai_client.chat.completions.create(
+                model=settings.openrouter_chat_model,
+                messages=messages,
+                response_format=QUIZ_FORMAT,
+                temperature=0.2,
+                max_tokens=min(4096, max(1024, payload.num_questions * 240)),
+                extra_body={"reasoning": {"effort": "low"}},
+            )
         
-        content = completion.choices[0].message.content
-        data = json.loads(content)
+        choice = completion.choices[0]
+        if getattr(choice, "finish_reason", None) == "length":
+            raise ValueError("OpenRouter quiz response was truncated")
+        content = choice.message.content
+        data = GenerateQuizResponse.model_validate_json(content)
+        if len(data.questions) != payload.num_questions:
+            raise ValueError("Quiz question count mismatch")
         
         questions = []
-        for q in data.get("questions", []):
+        for q in data.questions:
             questions.append(QuizQuestion(
-                text=q["text"],
-                options=q["options"],
-                correctOptionIndex=q["correctOptionIndex"],
-                isRemedial=payload.is_remedial
+                text=q.text,
+                options=q.options,
+                correctOptionIndex=q.correctOptionIndex,
+                isRemedial=payload.is_remedial,
+                difficulty=q.difficulty
             ))
             
         return GenerateQuizResponse(questions=questions)
         
+    except CapacityExceeded:
+        raise HTTPException(status_code=503, detail="AI service is busy; retry shortly", headers={"Retry-After": "5"})
     except Exception as e:
-        logger.exception("Error calling Groq API for quiz generation")
+        logger.error("OpenRouter quiz generation failed: %s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Groq API error: {str(e)}",
+            detail="OpenRouter quiz response was unavailable or invalid",
         )
 
 class WrongQuestionFeedbackRequest(BaseModel):
-    question_id: int
-    topic: str
-    question_text: str
-    student_answer: str
-    correct_answer: str
+    question_id: int = Field(ge=1)
+    topic: str = Field(min_length=1, max_length=200)
+    question_text: str = Field(min_length=1, max_length=5000)
+    student_answer: str = Field(max_length=2000)
+    correct_answer: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def require_nonblank_academic_fields(self):
+        if not self.topic.strip() or not self.question_text.strip() or not self.correct_answer.strip():
+            raise ValueError("Topic, question and correct answer must not be blank")
+        return self
 
 class GenerateFeedbackRequest(BaseModel):
-    wrong_answers: list[WrongQuestionFeedbackRequest]
+    wrong_answers: list[WrongQuestionFeedbackRequest] = Field(max_length=30)
+
+    @model_validator(mode="after")
+    def require_unique_question_ids(self):
+        question_ids = [item.question_id for item in self.wrong_answers]
+        if len(question_ids) != len(set(question_ids)):
+            raise ValueError("Question IDs must be unique")
+        return self
 
 class QuestionFeedbackResponse(BaseModel):
     questionId: int
-    feedback: str
+    feedback: str = Field(min_length=1, max_length=2000)
 
 class GenerateFeedbackResponse(BaseModel):
     feedbacks: list[QuestionFeedbackResponse]
@@ -460,9 +511,7 @@ class GenerateFeedbackResponse(BaseModel):
 @app.post("/generate-feedback", response_model=GenerateFeedbackResponse, dependencies=[Depends(require_api_key)])
 def generate_feedback(payload: GenerateFeedbackRequest) -> GenerateFeedbackResponse:
     try:
-        client = Groq(api_key=settings.groq_api_key)
-        
-        system_prompt = (
+        system_prompt = UNTRUSTED_DATA_RULE + (
             "You are an empathetic, expert teacher. The student just finished a quiz and got some questions wrong.\n"
             "For each wrong question, generate a short, encouraging feedback paragraph in Spanish (around 30 to 50 words) explaining why their answer is wrong and the correct answer is right. You may include a very brief example if it's a complex topic.\n"
             "Return ONLY a JSON object with a list of feedbacks under the key 'feedbacks'.\n"
@@ -471,13 +520,7 @@ def generate_feedback(payload: GenerateFeedbackRequest) -> GenerateFeedbackRespo
             "- 'feedback': The feedback text\n"
         )
         
-        wrong_details = ""
-        for w in payload.wrong_answers:
-            wrong_details += f"- Question ID: {w.question_id}. Topic: {w.topic}. Question: {w.question_text}. They answered: {w.student_answer}. Correct was: {w.correct_answer}.\n"
-            
-        user_message = "The student answered everything correctly!"
-        if wrong_details:
-            user_message = f"The student got these wrong:\n{wrong_details}\nGenerate the JSON now."
+        user_message = json.dumps({"untrusted_wrong_answers": [w.model_dump() for w in payload.wrong_answers]}, ensure_ascii=False)
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -487,28 +530,43 @@ def generate_feedback(payload: GenerateFeedbackRequest) -> GenerateFeedbackRespo
         if not payload.wrong_answers:
             return GenerateFeedbackResponse(feedbacks=[])
 
-        completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=messages,
-            response_format={"type": "json_object"},
-            temperature=0.5,
-        )
+        with provider_capacity.acquire():
+            completion = openai_client.chat.completions.create(
+                model=settings.openrouter_chat_model,
+                messages=messages,
+                response_format=FEEDBACK_FORMAT,
+                temperature=0.5,
+                max_tokens=min(4096, max(1024, len(payload.wrong_answers) * 256)),
+                extra_body={"reasoning": {"effort": "low"}},
+            )
         
-        content = completion.choices[0].message.content
-        data = json.loads(content)
-        
-        feedbacks = []
-        for f in data.get("feedbacks", []):
-            feedbacks.append(QuestionFeedbackResponse(
-                questionId=f["questionId"],
-                feedback=f["feedback"]
-            ))
+        choice = completion.choices[0]
+        if getattr(choice, "finish_reason", None) == "length":
+            raise ValueError("OpenRouter feedback response was truncated")
+        content = choice.message.content
+        data = GenerateFeedbackResponse.model_validate_json(content)
+
+        expected_ids = [item.question_id for item in payload.wrong_answers]
+        actual_ids = [item.questionId for item in data.feedbacks]
+        if len(actual_ids) != len(expected_ids) or set(actual_ids) != set(expected_ids):
+            raise ValueError("Feedback question IDs do not match the request")
+
+        feedback_by_id = {item.questionId: item for item in data.feedbacks}
+        feedbacks = [
+            QuestionFeedbackResponse(
+                questionId=question_id,
+                feedback=feedback_by_id[question_id].feedback,
+            )
+            for question_id in expected_ids
+        ]
             
         return GenerateFeedbackResponse(feedbacks=feedbacks)
         
+    except CapacityExceeded:
+        raise HTTPException(status_code=503, detail="AI service is busy; retry shortly", headers={"Retry-After": "5"})
     except Exception as e:
-        logger.exception("Error calling Groq API for feedback generation")
+        logger.error("OpenRouter feedback generation failed: %s", type(e).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Groq API error: {str(e)}",
+            detail="OpenRouter feedback response was unavailable or invalid",
         )

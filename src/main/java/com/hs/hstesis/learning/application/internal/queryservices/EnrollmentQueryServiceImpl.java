@@ -5,6 +5,7 @@ import com.hs.hstesis.learning.application.querymodels.EnrollmentQueryModel;
 import com.hs.hstesis.learning.domain.model.queries.ExistsEnrollmentByUserIdAndClassroomIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.ExistsEnrollmentByUserIdAndRoleQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetClassroomMembersQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetEnrolledCourseIdsByUserIdQuery;
 import com.hs.hstesis.learning.domain.services.EnrollmentQueryService;
 import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.EnrollmentRepository;
 import org.springframework.stereotype.Service;
@@ -46,5 +47,13 @@ public class EnrollmentQueryServiceImpl implements EnrollmentQueryService {
     @Override
     public boolean handle(ExistsEnrollmentByUserIdAndClassroomIdQuery query) {
         return enrollmentRepository.existsByUserIdAndClassroomId(query.userId(), query.classroomId());
+    }
+
+    @Override
+    public List<Long> handle(GetEnrolledCourseIdsByUserIdQuery query) {
+        return enrollmentRepository.findAllByUserId(query.userId()).stream()
+                .map(enrollment -> enrollment.getClassroom().getCourse().getId())
+                .distinct()
+                .toList();
     }
 }

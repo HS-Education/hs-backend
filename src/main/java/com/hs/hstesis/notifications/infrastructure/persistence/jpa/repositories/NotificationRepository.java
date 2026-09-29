@@ -8,5 +8,7 @@ import java.util.List;
 
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
-    List<Notification> findByUserIdAndIsReadFalse(Long userId);
+    List<Notification> findByUserIdAndIsReadFalseAndTypeIn(
+            Long userId,
+            List<com.hs.hstesis.notifications.domain.model.valueobjects.NotificationType> types);
 }

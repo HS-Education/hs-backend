@@ -2,6 +2,7 @@ package com.hs.hstesis.onboarding.interfaces.rest;
 
 import com.hs.hstesis.onboarding.domain.model.commands.CreatePlatformTutorialCommand;
 import com.hs.hstesis.onboarding.domain.model.commands.DeletePlatformTutorialCommand;
+import com.hs.hstesis.onboarding.domain.model.commands.UpdatePlatformTutorialCommand;
 import com.hs.hstesis.onboarding.domain.model.queries.GetAllPlatformTutorialsQuery;
 import com.hs.hstesis.onboarding.domain.services.PlatformTutorialCommandService;
 import com.hs.hstesis.onboarding.domain.services.PlatformTutorialQueryService;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -42,9 +44,12 @@ public class PlatformTutorialController {
     }
 
     @Operation(summary = "Create a platform tutorial")
+    @PreAuthorize("hasRole('COORDINATOR')")
     @PostMapping
     public ResponseEntity<PlatformTutorialResource> createTutorial(@RequestBody CreatePlatformTutorialResource resource) {
-        var command = new CreatePlatformTutorialCommand(resource.title(), resource.description(), resource.fileUrl());
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        var command = new CreatePlatformTutorialCommand(resource.title(), resource.description(), resource.fileUrl(), userDetails.getId());
         var id = commandService.handle(command);
         
         if (id.isEmpty()) {
@@ -56,10 +61,19 @@ public class PlatformTutorialController {
     }
 
     @Operation(summary = "Delete a platform tutorial")
+    @PreAuthorize("hasRole('COORDINATOR')")
     @DeleteMapping("/{id}")
     public ResponseEntity<MessageResource> deleteTutorial(@PathVariable Long id) {
         commandService.handle(new DeletePlatformTutorialCommand(id));
         return ResponseEntity.ok(new MessageResource("Tutorial deleted successfully"));
+    }
+
+    @Operation(summary = "Update a platform tutorial")
+    @PreAuthorize("hasRole('COORDINATOR')")
+    @PutMapping("/{id}")
+    public ResponseEntity<MessageResource> updateTutorial(@PathVariable Long id, @RequestBody CreatePlatformTutorialResource resource) {
+        commandService.handle(new UpdatePlatformTutorialCommand(id, resource.title(), resource.description(), resource.fileUrl()));
+        return ResponseEntity.ok(new MessageResource("Tutorial updated successfully"));
     }
 }
 

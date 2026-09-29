@@ -64,7 +64,8 @@ public class ClassroomController {
             return ResponseEntity.notFound().build();
         }
 
-        var classroomResource = ClassroomResourceFromEntityAssembler.toResourceFromEntity(classroom.get());
+        var classroomResource = ClassroomResourceFromEntityAssembler.toResourceFromEntity(
+                classroom.get(), getTeacherName(classroomId));
         return ResponseEntity.ok(classroomResource);
     }
 
@@ -83,7 +84,8 @@ public class ClassroomController {
         }
 
         var resources = classrooms.stream()
-                .map(ClassroomResourceFromEntityAssembler::toResourceFromEntity)
+                .map(classroom -> ClassroomResourceFromEntityAssembler.toResourceFromEntity(
+                        classroom, getTeacherName(classroom.getId())))
                 .toList();
 
         return ResponseEntity.ok(resources);
@@ -111,5 +113,13 @@ public class ClassroomController {
         var command = new DeleteClassroomCommand(classroomId);
         classroomCommandService.handle(command);
         return ResponseEntity.ok(new MessageResource("Classroom deleted successfully"));
+    }
+
+    private String getTeacherName(Long classroomId) {
+        return enrollmentQueryService.handle(new GetClassroomMembersQuery(classroomId)).stream()
+                .filter(member -> "TEACHER".equals(member.roleInClassroom()))
+                .map(member -> member.userName())
+                .findFirst()
+                .orElse(null);
     }
 }

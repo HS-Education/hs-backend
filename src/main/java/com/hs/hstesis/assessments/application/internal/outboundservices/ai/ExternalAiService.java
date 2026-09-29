@@ -41,7 +41,8 @@ public class ExternalAiService {
 
     public record GenerateQuizRequest(String context_text, String topic_name, int num_questions, boolean is_remedial) {}
 
-    public record QuizQuestion(String text, List<String> options, int correctOptionIndex, boolean isRemedial) {}
+    public record QuizQuestion(String text, List<String> options, int correctOptionIndex, boolean isRemedial,
+                               String difficulty) {}
 
     public record GenerateQuizResponse(List<QuizQuestion> questions) {}
     

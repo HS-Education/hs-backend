@@ -7,6 +7,7 @@ import com.hs.hstesis.learning.domain.model.entities.Area;
 import com.hs.hstesis.learning.domain.model.queries.ExistsAreaByCoordinatorIdQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetAllAreasQuery;
 import com.hs.hstesis.learning.domain.model.queries.GetAreaByIdQuery;
+import com.hs.hstesis.learning.domain.model.queries.GetAreaByCoordinatorIdQuery;
 import com.hs.hstesis.learning.domain.services.AreaQueryService;
 import com.hs.hstesis.learning.infrastructure.persistance.jpa.repositories.AreaRepository;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,15 @@ public class AreaQueryServiceImpl implements AreaQueryService {
 
                     return new AreaWithCoordinatorQueryModel(area, username);
                 });
+    }
+
+    @Override
+    public Optional<AreaWithCoordinatorQueryModel> handle(GetAreaByCoordinatorIdQuery query) {
+        return areaRepository.findByCoordinatorId(query.coordinatorId())
+                .map(area -> new AreaWithCoordinatorQueryModel(
+                        area,
+                        externalIamService.fetchUserNameById(area.getCoordinatorId()).orElse("Unknown")
+                ));
     }
 
 

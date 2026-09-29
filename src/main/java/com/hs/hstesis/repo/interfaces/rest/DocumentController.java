@@ -48,7 +48,8 @@ public class DocumentController {
             var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             resource = mapper.readValue(dataJson, com.hs.hstesis.repo.interfaces.rest.resources.UploadBulkDocumentsResource.class);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            throw new IllegalArgumentException("Invalid JSON format in 'data' field: " + e.getMessage());
+            // Jackson's diagnostic can include excerpts of user-supplied content.
+            throw new IllegalArgumentException("Invalid JSON format in 'data' field.");
         }
 
         var uploadBulkCommand = new com.hs.hstesis.repo.domain.model.commands.UploadBulkDocumentsCommand(
@@ -107,4 +108,14 @@ public class DocumentController {
         documentCommandService.handle(deleteDocumentCommand);
         return ResponseEntity.ok(new MessageResource("Document deleted successfully"));
     }
+
+    @PreAuthorize("hasRole('COORDINATOR')")
+    @Operation(description = "Retries AI processing for a failed document owned by the authenticated coordinator.")
+    @PostMapping("/{documentId}/retry-processing")
+    public ResponseEntity<Void> retryDocumentProcessing(@PathVariable Long courseId, @PathVariable Long documentId) {
+        documentCommandService.retryProcessing(new com.hs.hstesis.repo.domain.model.commands.RetryDocumentProcessingCommand(
+                courseId, documentId));
+        return ResponseEntity.accepted().build();
+    }
+
 }

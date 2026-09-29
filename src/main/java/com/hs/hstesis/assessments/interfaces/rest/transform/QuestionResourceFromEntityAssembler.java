@@ -10,7 +10,8 @@ public class QuestionResourceFromEntityAssembler {
                 entity.getTopicId(),
                 entity.getText(),
                 entity.getOptions(),
-                entity.getIsRemedial()
+                entity.getIsRemedial(),
+                entity.getDifficulty() != null ? entity.getDifficulty().name() : "INTERMEDIATE"
         );
     }
 }
