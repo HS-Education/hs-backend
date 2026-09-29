@@ -11,6 +11,7 @@ import com.hs.hstesis.achievements.domain.model.queries.GetAreaPerformanceQuery;
 import com.hs.hstesis.achievements.domain.model.queries.GetClassroomPerformanceQuery;
 import com.hs.hstesis.achievements.domain.model.queries.GetStudentPerformanceQuery;
 import java.util.List;
+import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
 import com.hs.hstesis.achievements.application.internal.outboundservices.ai.ExternalAiService;
 import com.hs.hstesis.achievements.application.internal.outboundservices.acl.ExternalLearningService;
 import com.hs.hstesis.achievements.application.internal.outboundservices.acl.ExternalRepoService;
@@ -18,8 +19,6 @@ import com.hs.hstesis.repo.interfaces.acl.dto.DocumentBasicData;
 import com.hs.hstesis.achievements.infrastructure.persistence.jpa.repositories.AchievementInsightRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 
 @Service
 public class AchievementCommandServiceImpl implements AchievementCommandService {
@@ -29,18 +28,21 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
     private final ExternalAiService externalAiService;
     private final ExternalLearningService externalLearningService;
     private final ExternalRepoService externalRepoService;
+    private final IamContextFacade iamContextFacade;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AchievementCommandServiceImpl(AchievementInsightRepository achievementInsightRepository,
                                          AchievementQueryService achievementQueryService,
                                          ExternalAiService externalAiService,
                                          ExternalLearningService externalLearningService,
-                                         ExternalRepoService externalRepoService) {
+                                         ExternalRepoService externalRepoService,
+                                         IamContextFacade iamContextFacade) {
         this.achievementInsightRepository = achievementInsightRepository;
         this.achievementQueryService = achievementQueryService;
         this.externalAiService = externalAiService;
         this.externalLearningService = externalLearningService;
         this.externalRepoService = externalRepoService;
+        this.iamContextFacade = iamContextFacade;
     }
 
     private String buildDocumentsContext(List<Long> courseIds) {
@@ -57,16 +59,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
         return sb.toString();
     }
 
-    private void ensureInsightCooldown(String entityType, Long entityId) {
-        var cutoff = java.util.Date.from(Instant.now().minus(7, ChronoUnit.DAYS));
-        var latest = achievementInsightRepository.findTopByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId);
-        if (latest.isPresent() && latest.get().getCreatedAt() != null && latest.get().getCreatedAt().after(cutoff)) {
-            throw new IllegalStateException("El análisis solo puede regenerarse una vez cada 7 días.");
-        }
-    }
-
     @Override
-    @Transactional
     public AchievementInsight handle(GenerateStudentInsightCommand command) {
         var performanceOpt = achievementQueryService.handle(new GetStudentPerformanceQuery(command.studentId()));
         if (performanceOpt.isEmpty()) {
@@ -74,11 +67,15 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
         }
 
         try {
-            String jsonData = objectMapper.writeValueAsString(performanceOpt.get());
+            String studentCode = iamContextFacade.fetchUserCodeById(command.studentId())
+                    .orElseThrow(() -> new IllegalArgumentException("No se encontró el código del estudiante."));
+            var performance = performanceOpt.get();
+            String jsonData = objectMapper.writeValueAsString(new com.hs.hstesis.achievements.domain.model.valueobjects.StudentInsightData(
+                    studentCode, performance.averageScore(), performance.topics()));
             List<Long> courseIds = externalLearningService.getEnrolledCourseIds(command.studentId());
             String docsContext = buildDocumentsContext(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "estudiante", command.studentName(), docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "estudiante", studentCode, docsContext);
             
             var insight = new AchievementInsight("STUDENT", command.studentId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -90,7 +87,6 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
     @Override
     @Transactional
     public AchievementInsight handle(GenerateClassroomInsightCommand command) {
-        ensureInsightCooldown("CLASSROOM", command.classroomId());
         var performanceOpt = achievementQueryService.handle(new GetClassroomPerformanceQuery(command.classroomId()));
         if (performanceOpt.isEmpty()) {
             throw new IllegalArgumentException("No hay datos de rendimiento para este aula.");
@@ -102,7 +98,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
                     .map(List::of).orElse(List.of());
             String docsContext = buildDocumentsContext(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "profesor", "", docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "profesor", null, docsContext);
             
             var insight = new AchievementInsight("CLASSROOM", command.classroomId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -114,7 +110,6 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
     @Override
     @Transactional
     public AchievementInsight handle(GenerateAreaInsightCommand command) {
-        ensureInsightCooldown("AREA", command.areaId());
         var performanceOpt = achievementQueryService.handle(new GetAreaPerformanceQuery(command.areaId()));
         if (performanceOpt.isEmpty()) {
             throw new IllegalArgumentException("No hay datos de rendimiento para esta área.");
@@ -125,7 +120,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
             List<Long> courseIds = externalLearningService.getCoursesByAreaId(command.areaId());
             String docsContext = buildDocumentsContext(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico", "", docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico", null, docsContext);
             
             var insight = new AchievementInsight("AREA", command.areaId(), insightText);
             return achievementInsightRepository.save(insight);

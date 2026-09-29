@@ -15,7 +15,7 @@ public class DocumentStatusTransitionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markProcessing(Long documentId) {
-        documents.findById(documentId).ifPresent(document -> {
+        documents.findByIdWithTargetsForUpdate(documentId).ifPresent(document -> {
             document.markAsProcessing();
             documents.save(document);
         });
@@ -23,7 +23,7 @@ public class DocumentStatusTransitionService {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markFailed(Long documentId) {
-        documents.findById(documentId).ifPresent(document -> {
+        documents.findByIdWithTargetsForUpdate(documentId).ifPresent(document -> {
             document.markAsFailed();
             documents.save(document);
         });

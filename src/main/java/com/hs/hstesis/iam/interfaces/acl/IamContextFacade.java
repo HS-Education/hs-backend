@@ -41,6 +41,11 @@ public class IamContextFacade {
                 .map(User::getName);
     }
 
+    public Optional<String> fetchUserCodeById(Long userId) {
+        return fetchUser(userId)
+                .map(User::getUsername);
+    }
+
     public Map<Long, String> fetchUserNamesByIds(Set<Long> userIds) {
         return fetchUsers(userIds).stream()
                 .collect(Collectors.toMap(

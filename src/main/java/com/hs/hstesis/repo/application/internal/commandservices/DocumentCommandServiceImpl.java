@@ -155,8 +155,27 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
 
     @Transactional
     @Override
+    public void retryProcessing(com.hs.hstesis.repo.domain.model.commands.RetryDocumentProcessingCommand command) {
+        Long userId = externalIamService.getAuthenticatedUserId();
+        var document = documentRepository.findByIdWithTargetsForUpdate(command.documentId())
+                .orElseThrow(() -> new com.hs.hstesis.repo.domain.exceptions.DocumentNotFoundException(command.documentId()));
+
+        boolean belongsToCourse = document.getTargets().stream()
+                .anyMatch(target -> target.getId().getCourseId().equals(command.courseId()));
+        if (!belongsToCourse || !externalLearningService.doesCoordinatorOwnCourse(userId, command.courseId())) {
+            throw new CoordinatorDoesNotOwnCourseException();
+        }
+
+        if (document.requestProcessingRetry()) {
+            // Saving the aggregate publishes its registered DocumentUploadedEvent.
+            documentRepository.save(document);
+        }
+    }
+
+    @Transactional
+    @Override
     public void handle(SaveDocumentEmbeddingsCommand command) {
-        var document = documentRepository.findById(command.documentId())
+        var document = documentRepository.findByIdWithTargetsForUpdate(command.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(command.documentId()));
 
         if (document.getStatus() == com.hs.hstesis.repo.domain.model.valueobjects.DocumentStatus.READY

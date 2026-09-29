@@ -10,6 +10,7 @@ import java.util.List;
 public interface DocumentCommandService {
     Long handle(UploadDocumentCommand command, UploadFile file);
     void handle(DeleteDocumentCommand command);
+    void retryProcessing(com.hs.hstesis.repo.domain.model.commands.RetryDocumentProcessingCommand command);
     void handle(SaveDocumentEmbeddingsCommand command);
     List<Long> handle(UploadBulkDocumentsCommand command, List<UploadFile> uploadFiles);
 }
