@@ -124,6 +124,9 @@ class ChatServiceImplTest {
         assertThat(savedMessages.getAllValues().get(2).getContent())
                 .isEqualTo("No se pudo completar la respuesta. Intenta enviar el mensaje nuevamente.")
                 .doesNotContain("partial attacker-influenced answer");
+        var request = org.mockito.ArgumentCaptor.forClass(GenerateRequest.class);
+        verify(ai).generateAnswerStream(request.capture(), any(), any(), any());
+        assertThat(request.getValue().maxTokens()).isEqualTo(1024);
         assertThat(error.get()).isInstanceOf(java.io.IOException.class);
     }
 }

@@ -1,5 +1,6 @@
 package com.hs.hstesis.repo.interfaces.rest;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hs.hstesis.iam.interfaces.acl.IamContextFacade;
 import com.hs.hstesis.repo.domain.services.ChatService;
 import com.hs.hstesis.repo.interfaces.rest.resources.ChatMessageResource;
@@ -9,19 +10,32 @@ import com.hs.hstesis.repo.interfaces.rest.resources.CreateChatSessionResource;
 import com.hs.hstesis.repo.interfaces.rest.resources.UpdateChatSessionResource;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping(value = "/api/v1/chat/sessions")
 @Tag(name = "Chat", description = "Unified endpoint for both course-specific and global RAG chat sessions")
 public class ChatController {
+    private static final Logger LOGGER = LoggerFactory.getLogger(ChatController.class);
+    private static final ObjectMapper STREAM_MAPPER = new ObjectMapper();
+
 
     private final ChatService chatService;
     private final IamContextFacade iamContextFacade;
@@ -149,7 +163,8 @@ public class ChatController {
     public void sendMessageStream(
             @PathVariable Long sessionId,
             @RequestBody @Valid ChatRequestResource request,
-            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
+            HttpServletRequest httpRequest,
+            HttpServletResponse response) throws IOException {
             
         var userId = iamContextFacade.getAuthenticatedUserId();
         
@@ -159,39 +174,91 @@ public class ChatController {
             return;
         }
         
-        response.setContentType("text/plain; charset=UTF-8");
+        boolean useEventStream = httpRequest.getHeader("Accept") != null
+                && httpRequest.getHeader("Accept").toLowerCase(java.util.Locale.ROOT)
+                        .contains(MediaType.TEXT_EVENT_STREAM_VALUE);
+        response.setContentType(useEventStream
+                ? MediaType.TEXT_EVENT_STREAM_VALUE + ";charset=UTF-8"
+                : "text/plain; charset=UTF-8");
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setBufferSize(1);
         response.setHeader("X-Accel-Buffering", "no");
-        response.setHeader("Cache-Control", "no-cache");
+        response.setHeader("Cache-Control", "no-cache, no-transform");
         
         var outputStream = response.getOutputStream();
         var clientConnected = new java.util.concurrent.atomic.AtomicBoolean(true);
+        var firstTokenTimeMs = new AtomicLong(-1);
+        long startedAt = System.nanoTime();
         
-        chatService.streamMessageResponse(sessionId, userId, request.question(),
-            token -> {
-                if (!clientConnected.get()) return;
-                try {
-                    outputStream.write(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    outputStream.flush();
-                } catch (java.io.IOException e) {
-                    // El usuario puede maximizar/cerrar el bubble durante el streaming.
-                    // La respuesta de IA debe terminar y persistirse aunque ya no haya cliente conectado.
-                    clientConnected.set(false);
+        try {
+            chatService.streamMessageResponse(sessionId, userId, request.question(),
+                token -> {
+                    firstTokenTimeMs.compareAndSet(-1, elapsedMillis(startedAt));
+                    if (useEventStream) {
+                        writeEvent(outputStream, clientConnected, "token", Map.of("text", token));
+                    } else {
+                        writeLegacyChunk(outputStream, clientConnected, token);
+                    }
+                },
+                () -> {
+                    if (useEventStream) {
+                        writeEvent(outputStream, clientConnected, "done", Map.of());
+                    } else if (clientConnected.get()) {
+                        try {
+                            outputStream.flush();
+                        } catch (IOException ignored) {}
+                    }
+                    LOGGER.info("Sery chat stream completed (sessionId={}, elapsedMs={}, firstTokenMs={})",
+                            sessionId, elapsedMillis(startedAt), firstTokenTimeMs.get());
+                },
+                error -> {
+                    LOGGER.warn("Sery chat stream failed (sessionId={}, elapsedMs={}, firstTokenMs={}, cause={})",
+                            sessionId, elapsedMillis(startedAt), firstTokenTimeMs.get(), rootCauseType(error));
+                    if (useEventStream) {
+                        writeEvent(outputStream, clientConnected, "error", Map.of("code", "generation_failed"));
+                    } else if (clientConnected.get()) {
+                        writeLegacyChunk(outputStream, clientConnected,
+                                "\n\n**Error:** La respuesta de Sery se interrumpió y no se completó. Intenta de nuevo.");
+                    }
                 }
-            },
-            () -> {
-                if (clientConnected.get()) {
-                    try {
-                        outputStream.flush();
-                    } catch (java.io.IOException ignored) {}
-                }
-            },
-            error -> {
-                error.printStackTrace();
-                try {
-                    outputStream.flush();
-                } catch (java.io.IOException ignored) {}
-            }
-        );
+            );
+        } catch (RuntimeException error) {
+            LOGGER.warn("Sery chat preparation failed (sessionId={}, elapsedMs={}, cause={})",
+                    sessionId, elapsedMillis(startedAt), rootCauseType(error));
+            throw error;
+        }
+    }
+
+    private static void writeEvent(OutputStream outputStream, AtomicBoolean clientConnected,
+            String event, Map<String, ?> payload) {
+        if (!clientConnected.get()) return;
+        try {
+            String frame = "event: " + event + "\ndata: " + STREAM_MAPPER.writeValueAsString(payload) + "\n\n";
+            outputStream.write(frame.getBytes(StandardCharsets.UTF_8));
+            outputStream.flush();
+        } catch (IOException error) {
+            clientConnected.set(false);
+        }
+    }
+
+    private static void writeLegacyChunk(OutputStream outputStream, AtomicBoolean clientConnected, String token) {
+        if (!clientConnected.get()) return;
+        try {
+            outputStream.write(token.getBytes(StandardCharsets.UTF_8));
+            outputStream.flush();
+        } catch (IOException error) {
+            // Keep generating and persist the complete answer after the client disconnects.
+            clientConnected.set(false);
+        }
+    }
+
+    private static long elapsedMillis(long startedAt) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+    }
+
+    private static String rootCauseType(Throwable error) {
+        Throwable cause = error;
+        while (cause.getCause() != null && cause.getCause() != cause) cause = cause.getCause();
+        return cause.getClass().getSimpleName();
     }
 }
