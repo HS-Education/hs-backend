@@ -46,8 +46,13 @@ public class QuestionnaireController {
     @PostMapping("/generate-remedial")
     @PreAuthorize("hasRole('COORDINATOR')")
     public ResponseEntity<Void> generateRemedialQuestionnaire(
-            @RequestBody com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
-        questionnaireCommandService.handle(command);
+            @RequestBody com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command,
+            org.springframework.security.core.Authentication authentication) {
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                authentication.getPrincipal();
+        questionnaireCommandService.handle(new com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand(
+                command.studentId(), command.courseId(), command.gradingPeriodId(), command.weekNumber(),
+                command.topicId(), command.numQuestions(), userDetails.getId()));
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
@@ -55,9 +60,12 @@ public class QuestionnaireController {
     @PreAuthorize("hasRole('STUDENT')")
     public ResponseEntity<Void> submitQuestionnaire(
             @PathVariable Long questionnaireInstanceId,
-            @RequestBody SubmitQuestionnaireResource resource) {
+            @RequestBody SubmitQuestionnaireResource resource,
+            org.springframework.security.core.Authentication authentication) {
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                authentication.getPrincipal();
         var command = SubmitQuestionnaireCommandFromResourceAssembler.toCommandFromResource(questionnaireInstanceId,
-                resource);
+                resource, userDetails.getId());
         questionnaireCommandService.handle(command);
         return new ResponseEntity<>(HttpStatus.CREATED);
     }

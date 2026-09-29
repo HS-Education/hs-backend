@@ -73,6 +73,61 @@ class DocumentChunkRepositoryIT {
         }
     }
 
+    @Test
+    void hostileGradeValueIsBoundAsDataAndDoesNotBypassTargetFilter() throws Exception {
+        try (Connection connection = connect()) {
+            insert(connection, 7, "ALLOWED", 10, "SECOND", vector(1, 0));
+            insert(connection, 8, "OTHER_GRADE_CANARY", 10, "THIRD", vector(1, 0));
+            String sql = """
+                    SELECT c.content FROM document_chunks c
+                    JOIN documents d ON c.document_id = d.id
+                    JOIN document_targets t ON d.id = t.document_id
+                    WHERE t.course_id = ? AND t.education_level = ? AND t.grade_level = ?
+                    AND d.status = 'READY'
+                    ORDER BY c.embedding <=> cast(? as vector) LIMIT ?
+                    """;
+            try (var query = connection.prepareStatement(sql)) {
+                query.setLong(1, 10L);
+                query.setString(2, "SECONDARY");
+                query.setString(3, "SECOND' OR '1'='1");
+                query.setString(4, vector(1, 0));
+                query.setInt(5, 10);
+                try (ResultSet rows = query.executeQuery()) {
+                    assertThat(rows.next()).isFalse();
+                }
+                query.setString(3, "SECOND");
+                try (ResultSet rows = query.executeQuery()) {
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getString(1)).isEqualTo("ALLOWED");
+                    assertThat(rows.next()).isFalse();
+                }
+            }
+        }
+    }
+
+    @Test
+    void onlyReadyDocumentsCanBeUsedAsRetrievedContext() throws Exception {
+        try (Connection connection = connect(); Statement statement = connection.createStatement()) {
+            insert(connection, 9, "READY_SOURCE", 10, "SECOND", vector(1, 0));
+            insert(connection, 10, "PROCESSING_CANARY", 10, "SECOND", vector(1, 0));
+            statement.executeUpdate("UPDATE documents SET status='PROCESSING' WHERE id=10");
+            try (var query = connection.prepareStatement("""
+                    SELECT c.content FROM document_chunks c
+                    JOIN documents d ON c.document_id = d.id
+                    JOIN document_targets t ON d.id = t.document_id
+                    WHERE t.course_id = 10 AND d.status='READY'
+                    ORDER BY c.embedding <=> cast(? as vector)
+                    """)) {
+                query.setString(1, vector(1, 0));
+                try (ResultSet rows = query.executeQuery()) {
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getString(1)).isEqualTo("READY_SOURCE");
+                    assertThat(rows.next()).isFalse();
+                }
+            }
+        }
+    }
+
     private static void insert(Connection connection, long id, String content, long courseId,
                                String grade, String vector) throws Exception {
         try (var statement = connection.prepareStatement("""

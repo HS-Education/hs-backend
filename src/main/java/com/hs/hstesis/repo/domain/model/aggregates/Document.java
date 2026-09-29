@@ -125,6 +125,16 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
         this.status = DocumentStatus.READY;
     }
 
+    public void markAsFailed() {
+        if (this.status == DocumentStatus.FAILED || this.status == DocumentStatus.READY) {
+            return;
+        }
+        if (this.status != DocumentStatus.PROCESSING && this.status != DocumentStatus.UPLOADED) {
+            throw new InvalidDocumentStatusTransitionException(this.status, DocumentStatus.FAILED);
+        }
+        this.status = DocumentStatus.FAILED;
+    }
+
     public void confirmUpload() {
         this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey()));
     }

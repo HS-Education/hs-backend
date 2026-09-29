@@ -3,6 +3,7 @@ package com.hs.hstesis.repo.application.internal.commandservices;
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalIamService;
 import com.hs.hstesis.repo.application.internal.outboundservices.acl.ExternalLearningService;
 import com.hs.hstesis.repo.application.internal.outboundservices.storage.UploadFile;
+import com.hs.hstesis.repo.application.internal.validation.PdfUploadValidator;
 import com.hs.hstesis.repo.domain.exceptions.*;
 import com.hs.hstesis.repo.domain.model.aggregates.Document;
 import com.hs.hstesis.repo.domain.model.commands.DeleteDocumentCommand;
@@ -21,15 +22,18 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
     private final FileStorageService fileStorageService;
     private final ExternalIamService externalIamService;
     private final ExternalLearningService externalLearningService;
+    private final PdfUploadValidator pdfUploadValidator;
 
     public DocumentCommandServiceImpl(DocumentRepository documentRepository,
                                       FileStorageService fileStorageService,
                                       ExternalIamService externalIamService,
-                                      ExternalLearningService externalLearningService) {
+                                      ExternalLearningService externalLearningService,
+                                      PdfUploadValidator pdfUploadValidator) {
         this.documentRepository = documentRepository;
         this.fileStorageService = fileStorageService;
         this.externalIamService = externalIamService;
         this.externalLearningService = externalLearningService;
+        this.pdfUploadValidator = pdfUploadValidator;
     }
 
     @Transactional
@@ -58,7 +62,10 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
             throw new TopicDoesNotBelongToCourseException(command.topicId(), command.courseId());
         }
 
-        String checksum = fileStorageService.calculateChecksum(file);
+        // A bounded, parsed and immutable copy is used for both the checksum and storage.
+        // This prevents file replacement between inspection and upload.
+        UploadFile safeFile = pdfUploadValidator.validate(file, command.originalFileName());
+        String checksum = fileStorageService.calculateChecksum(safeFile);
 
         var existing = documentRepository.findByChecksum(checksum);
         if (existing.isPresent()) {
@@ -66,7 +73,7 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
         }
 
         String objectKey = fileStorageService.generateObjectKey(command.originalFileName(), command.topicId());
-        fileStorageService.upload(file, objectKey);
+        fileStorageService.upload(safeFile, objectKey);
 
         var document = new Document(
                 command.title(),
@@ -100,6 +107,13 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
             return documentRepository.findByChecksum(checksum)
                     .map(Document::getId)
                     .orElseThrow(() -> new DocumentDeduplicationStateException(checksum, e));
+        } catch (RuntimeException e) {
+            try {
+                fileStorageService.delete(objectKey);
+            } catch (RuntimeException cleanupError) {
+                e.addSuppressed(cleanupError);
+            }
+            throw e;
         }
     }
 
@@ -145,6 +159,11 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
         var document = documentRepository.findById(command.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(command.documentId()));
 
+        if (document.getStatus() == com.hs.hstesis.repo.domain.model.valueobjects.DocumentStatus.READY
+                || document.getStatus() == com.hs.hstesis.repo.domain.model.valueobjects.DocumentStatus.FAILED) {
+            return; // A late or redelivered result cannot revive a failed document.
+        }
+
         document.replaceChunks(command.chunks());
         document.markAsReady();
 
@@ -154,8 +173,19 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
     @Transactional
     @Override
     public java.util.List<Long> handle(com.hs.hstesis.repo.domain.model.commands.UploadBulkDocumentsCommand command, java.util.List<UploadFile> uploadFiles) {
+        if (command == null || command.documentsMetadata() == null || uploadFiles == null
+                || command.documentsMetadata().isEmpty() || uploadFiles.isEmpty()) {
+            throw new IllegalArgumentException("Upload requires document metadata and files.");
+        }
         if (command.documentsMetadata().size() != uploadFiles.size()) {
             throw new IllegalArgumentException("Number of files must match number of metadata entries.");
+        }
+        Long userId = externalIamService.getAuthenticatedUserId();
+        if (!externalLearningService.isCoordinatorAssignedToAnyArea(userId)) {
+            throw new CoordinatorNotAssignedToAnyAreaException();
+        }
+        if (!externalLearningService.doesCoordinatorOwnCourse(userId, command.courseId())) {
+            throw new CoordinatorDoesNotOwnCourseException();
         }
 
         var requestedDocumentsByTopic = command.documentsMetadata().stream()
@@ -173,13 +203,19 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
             }
         }
 
-        java.util.List<Long> documentIds = new java.util.ArrayList<>();
-
+        // Build and validate every item before the first one reaches MinIO.
+        java.util.List<UploadFile> validatedFiles = new java.util.ArrayList<>();
+        java.util.List<UploadDocumentCommand> uploadCommands = new java.util.ArrayList<>();
         for (int i = 0; i < uploadFiles.size(); i++) {
             var metadata = command.documentsMetadata().get(i);
-            var file = uploadFiles.get(i);
-            
-            var uploadDocCommand = new UploadDocumentCommand(
+            if (metadata == null || metadata.gradeLevels() == null || metadata.gradeLevels().isEmpty()
+                    || metadata.educationLevel() == null) {
+                throw new IllegalArgumentException("Missing document upload metadata.");
+            }
+            if (!externalLearningService.doesTopicBelongToCourse(metadata.topicId(), command.courseId())) {
+                throw new TopicDoesNotBelongToCourseException(metadata.topicId(), command.courseId());
+            }
+            uploadCommands.add(new UploadDocumentCommand(
                     metadata.title(),
                     metadata.topicId(),
                     com.hs.hstesis.repo.domain.model.valueobjects.DocumentType.ACADEMIC,
@@ -188,9 +224,16 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
                     com.hs.hstesis.repo.domain.model.valueobjects.EducationLevel.valueOf(metadata.educationLevel()),
                     metadata.gradeLevels().stream().map(com.hs.hstesis.repo.domain.model.valueobjects.GradeLevel::valueOf).toList(),
                     command.courseId()
-            );
+            ));
+            validatedFiles.add(pdfUploadValidator.validate(uploadFiles.get(i),
+                    metadata.fileName()));
+        }
 
-            Long documentId = this.handle(uploadDocCommand, file);
+        java.util.List<Long> documentIds = new java.util.ArrayList<>();
+
+        for (int i = 0; i < validatedFiles.size(); i++) {
+            var file = validatedFiles.get(i);
+            Long documentId = this.handle(uploadCommands.get(i), file);
             documentIds.add(documentId);
         }
 

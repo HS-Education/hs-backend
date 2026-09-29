@@ -20,6 +20,8 @@ import org.springframework.security.authorization.AuthorizationDeniedException;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -94,5 +96,34 @@ class ChatServiceImplTest {
 
         assertThat(response.getContent()).contains("public lesson").doesNotContain("TEACHER_ONLY_CANARY");
         verify(chunks, never()).findSimilarChunksByCourseIdsIn(anyList(), anyString(), anyInt());
+    }
+
+    @Test
+    void streamFailureDoesNotPersistPartialModelAnswer() {
+        when(sessions.findById(1L)).thenReturn(Optional.of(new ChatSession(10L, 7L)));
+        when(learning.getUserEnrollmentContextByCourse(7L, 10L)).thenReturn(Optional.of(
+                new UserEnrollmentContext(EducationLevel.SECONDARY, GradeLevel.SECOND, 10L)));
+        when(ai.embedQuery("question")).thenReturn(new EmbedQueryResponse("fake", 2, List.of(1f, 0f)));
+        when(messages.findAllBySessionIdOrderByCreatedAtAsc(1L)).thenReturn(List.of());
+        when(messages.saveAndFlush(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(chunks.findSimilarChunksByAccessibleTarget(eq(10L), eq("SECONDARY"), eq("SECOND"), anyString(), eq(10)))
+                .thenReturn(List.of());
+        doAnswer(invocation -> {
+            Consumer<String> onToken = invocation.getArgument(1);
+            Consumer<Throwable> onError = invocation.getArgument(3);
+            onToken.accept("partial attacker-influenced answer");
+            onError.accept(new java.io.IOException("truncated stream"));
+            return null;
+        }).when(ai).generateAnswerStream(any(GenerateRequest.class), any(), any(), any());
+        var error = new AtomicReference<Throwable>();
+
+        service.streamMessageResponse(1L, 7L, "question", ignored -> {}, () -> {}, error::set);
+
+        var savedMessages = org.mockito.ArgumentCaptor.forClass(ChatMessage.class);
+        verify(messages, times(3)).saveAndFlush(savedMessages.capture());
+        assertThat(savedMessages.getAllValues().get(2).getContent())
+                .isEqualTo("No se pudo completar la respuesta. Intenta enviar el mensaje nuevamente.")
+                .doesNotContain("partial attacker-influenced answer");
+        assertThat(error.get()).isInstanceOf(java.io.IOException.class);
     }
 }

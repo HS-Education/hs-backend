@@ -159,6 +159,8 @@ public class ChatServiceImpl implements ChatService {
                 },
                 error -> {
                     try {
+                        // Never persist a partial model answer as if generation succeeded.
+                        fullAnswer.setLength(0);
                         persistResponse.run();
                     } catch (Exception persistenceError) {
                         persistenceError.printStackTrace();
