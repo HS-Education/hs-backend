@@ -12,6 +12,8 @@ import java.util.Optional;
 
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
+    long countByTopicId(Long topicId);
+
     @Query("""
      SELECT DISTINCT d
      FROM Document d

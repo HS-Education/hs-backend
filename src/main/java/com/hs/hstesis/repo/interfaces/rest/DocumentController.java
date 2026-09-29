@@ -107,4 +107,5 @@ public class DocumentController {
         documentCommandService.handle(deleteDocumentCommand);
         return ResponseEntity.ok(new MessageResource("Document deleted successfully"));
     }
+
 }

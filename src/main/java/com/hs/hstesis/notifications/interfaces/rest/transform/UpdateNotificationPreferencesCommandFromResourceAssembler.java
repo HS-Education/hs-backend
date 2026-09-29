@@ -7,10 +7,9 @@ public class UpdateNotificationPreferencesCommandFromResourceAssembler {
     public static UpdateNotificationPreferencesCommand toCommandFromResource(Long userId, UpdateNotificationPreferenceResource resource) {
         return new UpdateNotificationPreferencesCommand(
                 userId,
-                resource.notifyQuizResults(),
-                resource.notifyRelevantActivity(),
-                resource.notifyNewDocument(),
-                resource.notifyUnresolvedQuizzes()
+                resource.notifyNewQuestionnaire(),
+                resource.notifyNewTutorial(),
+                resource.notifyLowPerformance()
         );
     }
 }

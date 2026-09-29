@@ -7,6 +7,7 @@ public record QuestionResource(
         Long topicId,
         String text,
         List<String> options,
-        Boolean isRemedial
+        Boolean isRemedial,
+        String difficulty
 ) {
 }

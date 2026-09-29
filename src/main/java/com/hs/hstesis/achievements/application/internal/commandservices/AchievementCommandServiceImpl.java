@@ -18,6 +18,8 @@ import com.hs.hstesis.repo.interfaces.acl.dto.DocumentBasicData;
 import com.hs.hstesis.achievements.infrastructure.persistence.jpa.repositories.AchievementInsightRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 
 @Service
 public class AchievementCommandServiceImpl implements AchievementCommandService {
@@ -55,6 +57,14 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
         return sb.toString();
     }
 
+    private void ensureInsightCooldown(String entityType, Long entityId) {
+        var cutoff = java.util.Date.from(Instant.now().minus(7, ChronoUnit.DAYS));
+        var latest = achievementInsightRepository.findTopByEntityTypeAndEntityIdOrderByCreatedAtDesc(entityType, entityId);
+        if (latest.isPresent() && latest.get().getCreatedAt() != null && latest.get().getCreatedAt().after(cutoff)) {
+            throw new IllegalStateException("El análisis solo puede regenerarse una vez cada 7 días.");
+        }
+    }
+
     @Override
     @Transactional
     public AchievementInsight handle(GenerateStudentInsightCommand command) {
@@ -80,6 +90,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
     @Override
     @Transactional
     public AchievementInsight handle(GenerateClassroomInsightCommand command) {
+        ensureInsightCooldown("CLASSROOM", command.classroomId());
         var performanceOpt = achievementQueryService.handle(new GetClassroomPerformanceQuery(command.classroomId()));
         if (performanceOpt.isEmpty()) {
             throw new IllegalArgumentException("No hay datos de rendimiento para este aula.");
@@ -103,6 +114,7 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
     @Override
     @Transactional
     public AchievementInsight handle(GenerateAreaInsightCommand command) {
+        ensureInsightCooldown("AREA", command.areaId());
         var performanceOpt = achievementQueryService.handle(new GetAreaPerformanceQuery(command.areaId()));
         if (performanceOpt.isEmpty()) {
             throw new IllegalArgumentException("No hay datos de rendimiento para esta área.");

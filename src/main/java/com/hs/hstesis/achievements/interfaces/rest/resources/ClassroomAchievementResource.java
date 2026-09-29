@@ -4,5 +4,6 @@ import com.hs.hstesis.achievements.domain.model.valueobjects.ClassroomPerformanc
 
 public record ClassroomAchievementResource(
         ClassroomPerformance performance,
-        String latestInsight
+        String latestInsight,
+        java.util.Date latestInsightCreatedAt
 ) {}

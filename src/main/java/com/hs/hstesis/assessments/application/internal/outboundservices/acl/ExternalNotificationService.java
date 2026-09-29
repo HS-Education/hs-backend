@@ -12,7 +12,8 @@ public class ExternalNotificationService {
         this.notificationContextFacade = notificationContextFacade;
     }
 
-    public void sendNotification(Long userId, String message) {
-        notificationContextFacade.createNotification(userId, message);
+    public void sendNotification(Long userId, String message,
+                                 com.hs.hstesis.notifications.domain.model.valueobjects.NotificationType type) {
+        notificationContextFacade.createNotification(userId, message, type);
     }
 }

@@ -5,6 +5,6 @@ import com.hs.hstesis.achievements.interfaces.rest.resources.ClassroomAchievemen
 
 public class ClassroomAchievementResourceFromEntityAssembler {
     public static ClassroomAchievementResource toResourceFromEntity(ClassroomPerformance performance, String latestInsight) {
-        return new ClassroomAchievementResource(performance, latestInsight);
+        return new ClassroomAchievementResource(performance, latestInsight, null);
     }
 }

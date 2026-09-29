@@ -158,16 +158,19 @@ public class DocumentCommandServiceImpl implements DocumentCommandService {
             throw new IllegalArgumentException("Number of files must match number of metadata entries.");
         }
 
-        var gradingPeriod = externalLearningService.getGradingPeriodByCourseAndBimester(command.courseId(), command.bimester())
-                .orElseThrow(() -> new IllegalArgumentException("Grading period not found for the given bimester and course."));
+        var requestedDocumentsByTopic = command.documentsMetadata().stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        com.hs.hstesis.repo.interfaces.rest.resources.UploadBulkDocumentMetadataResource::topicId,
+                        java.util.stream.Collectors.counting()));
 
-        long numberOfWeeks = java.time.temporal.ChronoUnit.WEEKS.between(gradingPeriod.startDate(), gradingPeriod.endDate());
-        if (numberOfWeeks <= 0) {
-            numberOfWeeks = 1;
-        }
-
-        if (uploadFiles.size() > numberOfWeeks) {
-            throw new IllegalArgumentException("Number of uploaded files (" + uploadFiles.size() + ") exceeds the number of weeks in the bimester (" + numberOfWeeks + ").");
+        for (var entry : requestedDocumentsByTopic.entrySet()) {
+            long existingDocuments = documentRepository.countByTopicId(entry.getKey());
+            long requestedDocuments = entry.getValue();
+            if (existingDocuments + requestedDocuments > 3) {
+                throw new IllegalArgumentException(
+                        "A topic can have a maximum of 3 documents. Topic " + entry.getKey()
+                                + " already has " + existingDocuments + " document(s).");
+            }
         }
 
         java.util.List<Long> documentIds = new java.util.ArrayList<>();

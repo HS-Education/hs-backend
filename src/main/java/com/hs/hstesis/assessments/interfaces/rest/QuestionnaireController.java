@@ -35,14 +35,16 @@ public class QuestionnaireController {
     }
 
     @PostMapping("/generate")
-    @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR')")
+    @PreAuthorize("hasRole('TEACHER') and !hasRole('COORDINATOR')")
     public ResponseEntity<Void> generateQuestionnaire(@RequestBody GenerateQuestionnaireCommand command) {
-        questionnaireCommandService.handle(command);
+        var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        questionnaireCommandService.handle(new GenerateQuestionnaireCommand(command.courseId(), command.gradingPeriodId(), command.weekNumber(), command.allowedAttempts(), command.questionsPerAttempt(), userDetails.getId()));
         return new ResponseEntity<>(HttpStatus.CREATED);
     }
 
     @PostMapping("/generate-remedial")
-    @PreAuthorize("hasRole('TEACHER') or hasRole('COORDINATOR')")
+    @PreAuthorize("hasRole('COORDINATOR')")
     public ResponseEntity<Void> generateRemedialQuestionnaire(
             @RequestBody com.hs.hstesis.assessments.domain.model.commands.GenerateRemedialQuestionnaireCommand command) {
         questionnaireCommandService.handle(command);
@@ -78,7 +80,7 @@ public class QuestionnaireController {
     }
 
     @GetMapping("/available")
-    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
+    @PreAuthorize("!hasRole('ADMIN') and hasAnyRole('STUDENT', 'TEACHER', 'COORDINATOR')")
     public ResponseEntity<List<com.hs.hstesis.assessments.interfaces.rest.resources.AvailableQuestionnaireResource>> getAvailableQuestionnaires(
             org.springframework.security.core.Authentication authentication) {
         var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl) authentication

@@ -6,4 +6,5 @@ public record DocumentResource(Long id,
                                String title,
                                Long topicId,
                                DocumentFormat format,
-                               String originalFileName) {}
+                               String originalFileName,
+                               java.util.Date createdAt) {}

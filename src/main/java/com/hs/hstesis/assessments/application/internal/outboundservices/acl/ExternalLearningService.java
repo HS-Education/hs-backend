@@ -23,10 +23,22 @@ public class ExternalLearningService {
         return learningContextFacade.getEnrolledCourseIds(studentId);
     }
 
+    public List<Long> getCoordinatedCourseIds(Long coordinatorId) {
+        return learningContextFacade.getCoordinatedCourseIds(coordinatorId);
+    }
+
     public List<Long> getStudentIdsByCourseId(Long courseId) {
         return learningContextFacade.getStudentsByCourseId(courseId)
                 .stream()
                 .map(com.hs.hstesis.learning.interfaces.acl.dto.ClassroomStudentData::userId)
                 .toList();
+    }
+
+    public List<Long> getTeacherAndCoordinatorIdsByCourseId(Long courseId) {
+        return learningContextFacade.getTeacherAndCoordinatorIdsByCourseId(courseId);
+    }
+
+    public Optional<String> getStudentNameByCourseId(Long courseId, Long studentId) {
+        return learningContextFacade.getStudentNameByCourseId(courseId, studentId);
     }
 }

@@ -27,4 +27,8 @@ public class ExternalAssessmentService {
     public java.util.Optional<QuestionnaireDto> getQuestionnaireById(Long questionnaireId) {
         return assessmentsContextFacade.getQuestionnaireById(questionnaireId);
     }
+
+    public List<com.hs.hstesis.assessments.interfaces.acl.dto.RemedialTrackingDto> getRemedialTrackingsByStudentIdAndCourseId(Long studentId, Long courseId) {
+        return assessmentsContextFacade.getRemedialTrackingsByStudentIdAndCourseId(studentId, courseId);
+    }
 }
