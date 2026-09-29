@@ -264,10 +264,14 @@ def call_openrouter_generate(system_prompt: str, messages: list[dict], max_token
             messages=llm_messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            extra_body={"reasoning": {"effort": "low"}},
             stream=False,
         )
-    
-    answer = completion.choices[0].message.content or ""
+
+    choice = completion.choices[0]
+    answer = choice.message.content or ""
+    if getattr(choice, "finish_reason", None) == "length" or not answer.strip():
+        raise ValueError("OpenRouter returned an incomplete answer")
     return {
         "model": settings.openrouter_chat_model,
         "answer": answer,
@@ -285,11 +289,21 @@ def call_openrouter_generate_stream(system_prompt: str, messages: list[dict], ma
             messages=llm_messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            extra_body={"reasoning": {"effort": "low"}},
             stream=True,
         )
+        finish_reason = None
         for chunk in completion:
-            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content is not None:
-                yield sse_token_frame(chunk.choices[0].delta.content)
+            if not chunk.choices:
+                continue
+            choice = chunk.choices[0]
+            if choice.finish_reason is not None:
+                finish_reason = choice.finish_reason
+            if choice.delta and choice.delta.content is not None:
+                yield sse_token_frame(choice.delta.content)
+        if finish_reason != "stop":
+            logger.warning("OpenRouter stream did not finish normally (finish_reason=%s)", finish_reason)
+            return
     yield "data: [DONE]\n\n"
 
 
@@ -375,10 +389,16 @@ def generate_answer_stream(payload: GenerateRequest) -> StreamingResponse:
         )
 
 class GenerateQuizRequest(BaseModel):
-    context_text: str = Field(max_length=100_000)
-    topic_name: str = Field(max_length=200)
+    context_text: str = Field(min_length=1, max_length=100_000)
+    topic_name: str = Field(min_length=1, max_length=200)
     num_questions: int = Field(ge=1, le=30)
     is_remedial: bool
+
+    @model_validator(mode="after")
+    def require_nonblank_academic_context(self):
+        if not self.context_text.strip() or not self.topic_name.strip():
+            raise ValueError("Topic and context must not be blank")
+        return self
 
 class QuizQuestion(BaseModel):
     text: str = Field(min_length=1)
@@ -393,9 +413,14 @@ class GenerateQuizResponse(BaseModel):
 @app.post("/generate-quiz", response_model=GenerateQuizResponse, dependencies=[Depends(require_api_key)])
 def generate_quiz(payload: GenerateQuizRequest) -> GenerateQuizResponse:
     try:
+        distribution_instruction = (
+            "For this 15-question bank, generate exactly 5 LOW questions and 10 INTERMEDIATE questions. "
+            if payload.num_questions == 15 else ""
+        )
         system_prompt = UNTRUSTED_DATA_RULE + (
-            "You are an expert teacher. Generate a multiple choice quiz in Spanish based on the provided context.\n"
-            f"Number of questions: {payload.num_questions}\n"
+            "You are an expert teacher. Generate a multiple choice quiz in Spanish based only on facts explicitly stated in the provided context.\n"
+            "Do not invent numbers, calculations, definitions or claims absent from that context.\n"
+            f"Generate exactly {payload.num_questions} questions; neither more nor fewer.\n"
             f"Is remedial (needs extra explanation focus): {payload.is_remedial}\n"
             "Return ONLY a JSON object with a list of questions under the key 'questions'.\n"
             "Each question MUST have:\n"
@@ -404,7 +429,7 @@ def generate_quiz(payload: GenerateQuizRequest) -> GenerateQuizResponse:
             "- 'correctOptionIndex': An integer from 0 to 3\n"
             f"- 'isRemedial': {str(payload.is_remedial).lower()}\n"
             "- 'difficulty': either 'LOW' or 'INTERMEDIATE'\n"
-            "For a 15-question bank, generate exactly 5 LOW questions and 10 INTERMEDIATE questions. "
+            f"{distribution_instruction}"
             "LOW questions evaluate essential definitions and direct application; INTERMEDIATE questions "
             "require interpretation, comparison or multi-step application.\n"
         )
@@ -420,10 +445,17 @@ def generate_quiz(payload: GenerateQuizRequest) -> GenerateQuizResponse:
                 messages=messages,
                 response_format=QUIZ_FORMAT,
                 temperature=0.2,
+                max_tokens=min(4096, max(1024, payload.num_questions * 240)),
+                extra_body={"reasoning": {"effort": "low"}},
             )
         
-        content = completion.choices[0].message.content
+        choice = completion.choices[0]
+        if getattr(choice, "finish_reason", None) == "length":
+            raise ValueError("OpenRouter quiz response was truncated")
+        content = choice.message.content
         data = GenerateQuizResponse.model_validate_json(content)
+        if len(data.questions) != payload.num_questions:
+            raise ValueError("Quiz question count mismatch")
         
         questions = []
         for q in data.questions:
@@ -447,18 +479,31 @@ def generate_quiz(payload: GenerateQuizRequest) -> GenerateQuizResponse:
         )
 
 class WrongQuestionFeedbackRequest(BaseModel):
-    question_id: int
-    topic: str = Field(max_length=200)
-    question_text: str = Field(max_length=5000)
+    question_id: int = Field(ge=1)
+    topic: str = Field(min_length=1, max_length=200)
+    question_text: str = Field(min_length=1, max_length=5000)
     student_answer: str = Field(max_length=2000)
-    correct_answer: str = Field(max_length=2000)
+    correct_answer: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def require_nonblank_academic_fields(self):
+        if not self.topic.strip() or not self.question_text.strip() or not self.correct_answer.strip():
+            raise ValueError("Topic, question and correct answer must not be blank")
+        return self
 
 class GenerateFeedbackRequest(BaseModel):
     wrong_answers: list[WrongQuestionFeedbackRequest] = Field(max_length=30)
 
+    @model_validator(mode="after")
+    def require_unique_question_ids(self):
+        question_ids = [item.question_id for item in self.wrong_answers]
+        if len(question_ids) != len(set(question_ids)):
+            raise ValueError("Question IDs must be unique")
+        return self
+
 class QuestionFeedbackResponse(BaseModel):
     questionId: int
-    feedback: str = Field(min_length=1)
+    feedback: str = Field(min_length=1, max_length=2000)
 
 class GenerateFeedbackResponse(BaseModel):
     feedbacks: list[QuestionFeedbackResponse]
@@ -491,17 +536,29 @@ def generate_feedback(payload: GenerateFeedbackRequest) -> GenerateFeedbackRespo
                 messages=messages,
                 response_format=FEEDBACK_FORMAT,
                 temperature=0.5,
+                max_tokens=min(4096, max(1024, len(payload.wrong_answers) * 256)),
+                extra_body={"reasoning": {"effort": "low"}},
             )
         
-        content = completion.choices[0].message.content
+        choice = completion.choices[0]
+        if getattr(choice, "finish_reason", None) == "length":
+            raise ValueError("OpenRouter feedback response was truncated")
+        content = choice.message.content
         data = GenerateFeedbackResponse.model_validate_json(content)
-        
-        feedbacks = []
-        for f in data.feedbacks:
-            feedbacks.append(QuestionFeedbackResponse(
-                questionId=f.questionId,
-                feedback=f.feedback
-            ))
+
+        expected_ids = [item.question_id for item in payload.wrong_answers]
+        actual_ids = [item.questionId for item in data.feedbacks]
+        if len(actual_ids) != len(expected_ids) or set(actual_ids) != set(expected_ids):
+            raise ValueError("Feedback question IDs do not match the request")
+
+        feedback_by_id = {item.questionId: item for item in data.feedbacks}
+        feedbacks = [
+            QuestionFeedbackResponse(
+                questionId=question_id,
+                feedback=feedback_by_id[question_id].feedback,
+            )
+            for question_id in expected_ids
+        ]
             
         return GenerateFeedbackResponse(feedbacks=feedbacks)
         

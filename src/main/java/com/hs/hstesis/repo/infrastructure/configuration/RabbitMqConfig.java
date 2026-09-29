@@ -12,7 +12,9 @@ public class RabbitMqConfig {
 
     @Bean
     public MessageConverter jsonMessageConverter() {
-        return new JacksonJsonMessageConverter();
+        return new JacksonJsonMessageConverter(
+                "com.hs.hstesis.repo.infrastructure.brokers.rabbitmq.dtos",
+                "com.hs.hstesis.notifications.infrastructure.brokers.rabbitmq.dtos");
     }
 
     @Bean

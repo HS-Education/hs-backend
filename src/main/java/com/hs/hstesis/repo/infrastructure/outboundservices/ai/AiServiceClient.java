@@ -69,16 +69,7 @@ public class AiServiceClient {
                             throw new IOException("AI stream returned HTTP " + res.getStatusCode().value());
                         }
                         try (BufferedReader reader = new BufferedReader(new InputStreamReader(res.getBody(), StandardCharsets.UTF_8))) {
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                if (line.startsWith("data: ")) {
-                                    String data = line.substring(6);
-                                    if ("[DONE]".equals(data)) {
-                                        break;
-                                    }
-                                    onToken.accept(parseToken(data));
-                                }
-                            }
+                            consumeStream(reader, onToken);
                         }
                         onComplete.run();
                         return null;
@@ -86,6 +77,21 @@ public class AiServiceClient {
         } catch (Exception e) {
             onError.accept(e);
         }
+    }
+
+    static void consumeStream(BufferedReader reader, Consumer<String> onToken) throws IOException {
+        String line;
+        boolean completed = false;
+        while ((line = reader.readLine()) != null) {
+            if (!line.startsWith("data: ")) continue;
+            String data = line.substring(6);
+            if ("[DONE]".equals(data)) {
+                completed = true;
+                break;
+            }
+            onToken.accept(parseToken(data));
+        }
+        if (!completed) throw new IOException("AI stream ended without a completion signal");
     }
 
     static String parseToken(String data) throws JsonProcessingException {

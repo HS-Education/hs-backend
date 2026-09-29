@@ -17,6 +17,12 @@ import java.util.*;
 /** Rejects unsupported PDFs; it is not an antivirus or a PDF sanitizer. */
 @Component
 public final class PdfUploadValidator {
+    private final MalwareScanner malwareScanner;
+
+    public PdfUploadValidator(MalwareScanner malwareScanner) {
+        this.malwareScanner = malwareScanner;
+    }
+
     public static final int MAX_BYTES = 50 * 1024 * 1024;
     public static final int MAX_PAGES = 300;
     private static final int MAX_OBJECTS = 100_000;
@@ -45,6 +51,7 @@ public final class PdfUploadValidator {
             throw new InvalidPdfUploadException();
         String tail = new String(bytes, Math.max(0, bytes.length - 1024), Math.min(1024, bytes.length), StandardCharsets.ISO_8859_1);
         if (!tail.stripTrailing().endsWith("%%EOF")) throw new InvalidPdfUploadException();
+        malwareScanner.scan(bytes);
         try (var source = new RandomAccessReadBuffer(bytes)) {
             var parser = new StrictPdfParser(source);
             try (var pdf = parser.parse()) {
