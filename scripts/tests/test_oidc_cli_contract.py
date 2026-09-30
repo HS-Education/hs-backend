@@ -24,7 +24,7 @@ class OidcCliContractTest(unittest.TestCase):
         self.assertNotIn('addPassword', self.source + self.template)
 
     def test_federation_is_bound_to_the_protected_backend_environment(self):
-        for expected in ('repo:HS-Education/hs-backend:environment:azure-students',
+        for expected in ('repo:HS-Education@334800057/hs-backend@1170255521:environment:azure-students',
                          'https://token.actions.githubusercontent.com', 'api://AzureADTokenExchange'):
             self.assertIn(expected, self.template)
             self.assertIn(expected, self.source)
@@ -64,7 +64,7 @@ $ast=[System.Management.Automation.Language.Parser]::ParseFile('SOURCE_PATH',[re
 if ($errors) { throw 'OIDC script syntax errors.' }
 $function=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-CdFederations'},$true)
 . ([scriptblock]::Create($function.Extent.Text))
-$valid=@{name='hs-backend-azure-students'; issuer='https://token.actions.githubusercontent.com'; subject='repo:HS-Education/hs-backend:environment:azure-students'; audiences=@('api://AzureADTokenExchange')}
+$valid=@{name='hs-backend-azure-students'; issuer='https://token.actions.githubusercontent.com'; subject='repo:HS-Education@334800057/hs-backend@1170255521:environment:azure-students'; audiences=@('api://AzureADTokenExchange')}
 Assert-CdFederations -Federations @()
 Assert-CdFederations -Federations @([pscustomobject]$valid)
 foreach ($field in @('name','issuer','subject','audiences')) {
@@ -73,6 +73,34 @@ foreach ($field in @('name','issuer','subject','audiences')) {
     $rejected=$false
     try { Assert-CdFederations -Federations @([pscustomobject]$invalid) } catch { $rejected=$true }
     if (!$rejected) { throw "Untrusted federation accepted: $field" }
+}
+foreach ($subject in @(
+    'repo:HS-Education/hs-backend:environment:azure-students',
+    'repo:HS-Education@334800058/hs-backend@1170255521:environment:azure-students',
+    'repo:HS-Education@334800057/hs-backend@1170255522:environment:azure-students',
+    'repo:HS-Education@334800057/hs-backend@1170255521:environment:production',
+    'repo:hs-education@334800057/hs-backend@1170255521:environment:azure-students',
+    'repo:HS-Education@334800057/hs-backend@1170255521:environment:Azure-Students',
+    'repo:HS-Education@334800057/hs-backend@1170255521:ref:refs/tags/v0.2.2',
+    'repo:HS-Education@334800057/hs-backend@1170255521:environment:*'
+)) {
+    $invalid=$valid.Clone(); $invalid.subject=$subject
+    $rejected=$false
+    try { Assert-CdFederations -Federations @([pscustomobject]$invalid) } catch { $rejected=$true }
+    if (!$rejected) { throw "Untrusted subject accepted: $subject" }
+}
+foreach ($field in @('name','issuer','audiences')) {
+    $invalid=$valid.Clone()
+    $invalid[$field]=if ($field -eq 'audiences') {@('api://azureadtokenexchange')} else {$valid[$field].ToUpperInvariant()}
+    $rejected=$false
+    try { Assert-CdFederations -Federations @([pscustomobject]$invalid) } catch { $rejected=$true }
+    if (!$rejected) { throw "Case mismatch accepted: $field" }
+}
+foreach ($case in @(@{audiences=@()}, @{audiences=@('api://AzureADTokenExchange','other-audience')})) {
+    $invalid=$valid.Clone(); $invalid.audiences=$case.audiences
+    $rejected=$false
+    try { Assert-CdFederations -Federations @([pscustomobject]$invalid) } catch { $rejected=$true }
+    if (!$rejected) { throw 'Missing or extra audience accepted.' }
 }
 $rejected=$false
 try { Assert-CdFederations -Federations @([pscustomobject]$valid,[pscustomobject]$valid) } catch { $rejected=$true }
