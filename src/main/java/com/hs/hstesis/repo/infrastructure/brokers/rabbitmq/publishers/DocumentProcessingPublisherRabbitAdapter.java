@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.TimeUnit;
 
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.messaging.provider", havingValue = "rabbitmq", matchIfMissing = true)
 public class DocumentProcessingPublisherRabbitAdapter implements DocumentProcessingPublisher {
 
     private final RabbitTemplate rabbitTemplate;

@@ -13,13 +13,13 @@ import org.springframework.security.authentication.dao.DaoAuthenticationProvider
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 
 import java.util.List;
@@ -27,6 +27,12 @@ import java.util.List;
 @Configuration
 @EnableMethodSecurity
 public class WebSecurityConfiguration {
+    @org.springframework.beans.factory.annotation.Value("${app.auth.allowed-origins:http://localhost:8080,http://localhost:4200}")
+    private List<String> allowedOrigins;
+    @org.springframework.beans.factory.annotation.Value("${app.auth.origin-check-enabled:false}")
+    private boolean originCheckEnabled;
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.enabled:false}")
+    private boolean frontendEnabled;
 
     private final UserDetailsService userDetailsService;
     private final BearerTokenService tokenService;
@@ -65,22 +71,22 @@ public class WebSecurityConfiguration {
         return hashingService;
     }
 
-//    @Bean
-//    @Order(1)
-//    public SecurityFilterChain swaggerSecurity(HttpSecurity http) throws Exception {
-//        http
-//                .securityMatcher("/swagger-ui/**", "/v3/api-docs/**")
-//                .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
-//                .httpBasic(Customizer.withDefaults())
-//                .csrf(AbstractHttpConfigurer::disable);
-//        return http.build();
-//    }
+    @Bean
+    public CookieCsrfTokenRepository csrfTokenRepository(
+            @org.springframework.beans.factory.annotation.Value("${app.auth.cookie-secure:false}") boolean secure) {
+        var repository = new CookieCsrfTokenRepository();
+        repository.setCookieCustomizer(cookie -> cookie.path("/").httpOnly(true).secure(secure).sameSite("Strict"));
+        return repository;
+    }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) {
+    public SecurityFilterChain filterChain(HttpSecurity http, CookieCsrfTokenRepository csrfTokenRepository) {
         http.cors(configurer -> configurer.configurationSource(request -> {
             var cors = new CorsConfiguration();
-            cors.setAllowedOrigins(List.of("http://localhost:8080", "http://localhost:4200"));
+            if (allowedOrigins.isEmpty() || allowedOrigins.contains("*")) {
+                throw new IllegalArgumentException("Explicit frontend origins are required");
+            }
+            cors.setAllowedOrigins(allowedOrigins);
             cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
             cors.setAllowedHeaders(List.of("*"));
             cors.setAllowCredentials(true);
@@ -88,18 +94,28 @@ public class WebSecurityConfiguration {
         }));
 
         http
-                .csrf(AbstractHttpConfigurer::disable)
+                // Keep the default XOR handler: bootstrap returns a masked token, not the raw cookie.
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(unauthorizedRequestHandler)
                         .accessDeniedHandler(customAccessDeniedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(request -> frontendEnabled && "GET".equals(request.getMethod())
+                                && !request.getRequestURI().startsWith("/api/")
+                                && !request.getRequestURI().startsWith("/actuator")).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated()
                 );
 
         http.addFilterBefore(authorizationRequestFilter(), UsernamePasswordAuthenticationFilter.class);
+        if (originCheckEnabled) {
+            http.addFilterBefore(new com.hs.hstesis.iam.infrastructure.authorization.sfs.pipeline.TrustedOriginFilter(
+                    new java.util.HashSet<>(allowedOrigins)), UsernamePasswordAuthenticationFilter.class);
+        }
 
         return http.build();
     }

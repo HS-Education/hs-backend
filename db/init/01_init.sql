@@ -12,6 +12,7 @@ CREATE TABLE public.documents (
     type VARCHAR(15) NOT NULL,
     format VARCHAR(15) NOT NULL,
     status VARCHAR(15) NOT NULL,
+    processing_generation INTEGER NOT NULL DEFAULT 1,
 
     original_file_name VARCHAR(255) NOT NULL,
     object_key VARCHAR(255) NOT NULL,

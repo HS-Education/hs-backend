@@ -19,9 +19,14 @@ if (!Number.isInteger(users) || users < 1 || users > 25 || !Number.isInteger(req
 
 const credentials = [];
 for (let i = 0; i < users; i++) {
+  const bootstrap = await fetch(new URL('/api/v1/auth/csrf', base), { signal: AbortSignal.timeout(5000) });
+  if (!bootstrap.ok) throw new Error(`CSRF bootstrap failed: HTTP ${bootstrap.status}`);
+  const csrf = await bootstrap.json();
+  if (csrf.headerName !== 'X-XSRF-TOKEN' || typeof csrf.token !== 'string') throw new Error('Invalid CSRF bootstrap');
+  const csrfCookie = bootstrap.headers.getSetCookie().map(line => line.split(';', 1)[0]).join('; ');
   const response = await fetch(new URL('/api/v1/auth/sign-in', base), {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'X-XSRF-TOKEN': csrf.token, cookie: csrfCookie },
     body: JSON.stringify({ username, password }),
     signal: AbortSignal.timeout(5000),
   });

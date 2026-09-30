@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "studentsSubscriptionId": { "value": "86d9e5e6-b9bf-44b4-915a-106207e0bc02" },
+    "location": { "value": "mexicocentral" },
+    "projectName": { "value": "hs-thesis" },
+    "frontendHosting": { "value": "app-service" },
+    "frontendOrigin": { "value": "" },
+    "postgresPassword": { "value": "REPLACE_WITH_OWNER_PASSWORD" },
+    "postgresAppPassword": { "value": "REPLACE_WITH_SEPARATE_APP_PASSWORD" },
+    "jwtSecret": { "value": "REPLACE_WITH_AT_LEAST_32_RANDOM_BYTES" },
+    "workerApiKey": { "value": "REPLACE_WITH_RANDOM_WORKER_KEY" },
+    "openrouterApiKey": { "value": "REPLACE_LOCALLY_NEVER_COMMIT" },
+    "bootstrapAdminPassword": { "value": "REPLACE_WITH_AT_LEAST_16_CHARACTERS" },
+    "bootstrapAdminUsername": { "value": "thesis_admin" },
+    "budgetEmail": { "value": "" },
+    "monthlyBudgetUsd": { "value": 60 }
+  }
+}

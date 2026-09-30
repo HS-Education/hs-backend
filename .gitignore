@@ -32,6 +32,9 @@ bin/
 
 ### Environment ###
 .env
+.env.*
+!.env.example
+!.env.*.example
 
 ### Target ###
 target/
@@ -45,6 +48,9 @@ ai-service/*
 !ai-service/main.py
 !ai-service/openrouter_contract.py
 !ai-service/safety.py
+!ai-service/infrastructure.py
+!ai-service/worker_settings.py
+!ai-service/requirements-azure.txt
 !ai-service/requirements.txt
 !ai-service/tests/
 ai-service/tests/*
@@ -58,3 +64,18 @@ db/*
 !db/init/
 db/init/*
 !db/init/01_init.sql
+
+# Deployment values and secrets are supplied locally, never committed.
+infra/azure/*.local.json
+infra/azure/*.local.bicepparam
+infra/azure/*.parameters.json
+infra/azure/*.zip
+infra/azure/*.pem
+infra/azure/*.key
+infra/azure/*.pfx
+infra/azure/*.p12
+infra/azure/.generated/
+# Frontend assets are generated only while building a coordinated release.
+src/main/resources/static/
+**/__pycache__/
+*.pyc

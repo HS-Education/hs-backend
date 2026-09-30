@@ -1,0 +1,15 @@
+{
+  "Name": "HS Thesis CD PostgreSQL Firewall Operator",
+  "IsCustom": true,
+  "Description": "Read the selected PostgreSQL server and manage ephemeral CD firewall rules only.",
+  "Actions": [
+    "Microsoft.DBforPostgreSQL/flexibleServers/read",
+    "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules/read",
+    "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules/write",
+    "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules/delete"
+  ],
+  "NotActions": [],
+  "DataActions": [],
+  "NotDataActions": [],
+  "AssignableScopes": ["/subscriptions/86d9e5e6-b9bf-44b4-915a-106207e0bc02"]
+}

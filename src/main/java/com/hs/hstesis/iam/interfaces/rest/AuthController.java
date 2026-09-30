@@ -26,13 +26,15 @@ public class AuthController {
     private final SignInCommandService signInCommandService;
     private final RefreshTokenService refreshTokenService;
     private final TokenService tokenService;
+    private final com.hs.hstesis.iam.infrastructure.authorization.sfs.configuration.AuthCookiePolicy cookiePolicy;
     private final com.hs.hstesis.iam.domain.services.UserCommandService userCommandService;
 
-    public AuthController(SignInCommandService signInCommandService, RefreshTokenService refreshTokenService, TokenService tokenService, com.hs.hstesis.iam.domain.services.UserCommandService userCommandService) {
+    public AuthController(SignInCommandService signInCommandService, RefreshTokenService refreshTokenService, TokenService tokenService, com.hs.hstesis.iam.domain.services.UserCommandService userCommandService, com.hs.hstesis.iam.infrastructure.authorization.sfs.configuration.AuthCookiePolicy cookiePolicy) {
         this.signInCommandService = signInCommandService;
         this.refreshTokenService = refreshTokenService;
         this.tokenService = tokenService;
         this.userCommandService = userCommandService;
+        this.cookiePolicy = cookiePolicy;
     }
 
     @Operation(description = "Authenticates a user and returns a JWT token along with a refresh token in HttpOnly cookies.")
@@ -64,21 +66,8 @@ public class AuthController {
 
         var refreshToken = refreshTokenService.createRefreshToken(user.getId());
 
-        ResponseCookie jwtCookie = ResponseCookie.from("JWT_TOKEN", token)
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .maxAge(3600)
-                .sameSite("Strict")
-                .build();
-
-        ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", refreshToken.getToken())
-                .httpOnly(true)
-                .secure(false)
-                .path("/api/v1/auth/refresh-token")
-                .maxAge(604800000)
-                .sameSite("Strict")
-                .build();
+        ResponseCookie jwtCookie = cookiePolicy.access(token);
+        ResponseCookie refreshCookie = cookiePolicy.refresh(refreshToken.getToken());
 
         var responseResource = AuthenticatedUserResourceFromEntityAssembler.toResourceFromEntity(user);
 
@@ -105,13 +94,7 @@ public class AuthController {
                     .map(user -> {
                         String newToken = tokenService.generateTokenFromUser(user);
 
-                        ResponseCookie jwtCookie = ResponseCookie.from("JWT_TOKEN", newToken)
-                                .httpOnly(true)
-                                .secure(false)
-                                .path("/")
-                                .maxAge(3600)
-                                .sameSite("Strict")
-                                .build();
+                        ResponseCookie jwtCookie = cookiePolicy.access(newToken);
 
                         return ResponseEntity.ok()
                                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
@@ -153,8 +136,8 @@ public class AuthController {
             refreshTokenService.deleteByUserId(userDetails.getId());
         }
 
-        ResponseCookie jwtCookie = ResponseCookie.from("JWT_TOKEN", "").path("/").maxAge(0).build();
-        ResponseCookie refreshCookie = ResponseCookie.from("REFRESH_TOKEN", "").path("/api/v1/auth/refresh-token").maxAge(0).build();
+        ResponseCookie jwtCookie = cookiePolicy.clearAccess();
+        ResponseCookie refreshCookie = cookiePolicy.clearRefresh();
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
