@@ -13,6 +13,7 @@ $allowedRegions = @(Get-StudentsAllowedRegions -SubscriptionId $subscriptionId)
 Assert-StudentsRegion -Region $parameters.parameters.location.value -AllowedRegions $allowedRegions
 if ($Mode -eq 'Create' -and !$ApprovePaidResources) { throw 'Creating paid resources requires -ApprovePaidResources after cost review.' }
 if ($Mode -eq 'Create') {
+    & "$PSScriptRoot/Test-AppServiceCapacity.ps1" -Region $parameters.parameters.location.value
     foreach ($name in @('postgresPassword', 'postgresAppPassword', 'jwtSecret', 'workerApiKey', 'openrouterApiKey', 'bootstrapAdminPassword')) {
         if ($parameters.parameters.$name.value.StartsWith('PreviewOnly-') -or $parameters.parameters.$name.value.StartsWith('fixture-only-')) {
             throw 'Preview/test canaries cannot be used to create the real environment.'

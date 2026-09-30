@@ -53,3 +53,17 @@ foreach ($case in @('placeholder', 'same-passwords', 'short-jwt', 'unresolved-re
 }
 if ($parameterRejected -ne 7) { throw 'Not all private parameter cases were tested.' }
 Write-Host 'Private parameters: 1 valid and 7 rejected cases passed; no real credentials were used.'
+
+Assert-AppServiceCapacity -Validation ([pscustomobject]@{ status = 'Success'; error = $null })
+$capacityRejected = 0
+foreach ($validation in @(
+    [pscustomobject]@{ status = 'Failed'; error = [pscustomobject]@{ code = 'SubscriptionIsOverQuotaForSku' } },
+    [pscustomobject]@{ status = 'Success'; error = [pscustomobject]@{ code = 'CapacityUnavailable' } },
+    [pscustomobject]@{ status = 'Unknown'; error = $null }
+)) {
+    try { Assert-AppServiceCapacity -Validation $validation }
+    catch { $capacityRejected++; continue }
+    throw 'An invalid capacity result was accepted.'
+}
+if ($capacityRejected -ne 3) { throw 'Not all capacity validation cases were tested.' }
+Write-Host 'App Service validation: 1 valid and 3 rejected cases passed offline.'

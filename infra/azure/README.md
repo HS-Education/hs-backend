@@ -42,6 +42,8 @@ La consulta del 29/09/2026 a `sys.regionrestriction` permite solamente `westus`,
 
 `Validate-Students.ps1 -Region mexicocentral` y `Provision-Students.ps1` comprueban la política vigente. `Preview-Students.ps1 -Region mexicocentral` ejecuta un what-if usando valores ficticios, sin leer OpenRouter ni credenciales reales y sin crear recursos. Una vista previa incompleta o con errores no equivale a un despliegue validado.
 
+La API regional de usos devolvió un resumen `*` con 0/0; no se interpretó como prueba suficiente de bloqueo. La API específica `Microsoft.Web/validate` respondió **Success para B2 Linux, capacidad 1 en Mexico Central**, sin crear el grupo ni el plan. `Test-AppServiceCapacity.ps1` repite esa comprobación antes de cada Create: un what-if exitoso no reemplaza la validación del proveedor. La capacidad puede variar posteriormente. Se solicitó el registro de Microsoft.Quota para consultas, sin solicitar aumentos ni cambiar la oferta.
+
 ## Aprovisionamiento futuro, solo tras aprobar costo
 
 Copiar `parameters.example.json` a `parameters.local.json` (ignorado), completar valores fuertes distintos y proteger el archivo local. No compartirlo, no adjuntarlo a PR ni imprimirlo. API keys, passwords y JWT son secretos aunque coloquialmente se llamen llaves. Para repetir un despliegue reutilizar valores existentes; no rotar contraseñas/keys accidentalmente.
@@ -106,7 +108,7 @@ Backend: commits separados para Java/adaptadores/perfiles/seguridad/migraciones;
 
 Tras aprobar los dos PR y sus checks, validar develop conjuntamente, preparar una nueva `release/<versión>` (propuesta: 0.2.0 por incorporar despliegue cloud), abrir PR a main, sincronizar develop y publicar nuevos tags coincidentes. No crear la release desde el feature ni mover v0.1.1. Solo después completar parámetros privados, provisionar con costo aprobado, configurar OIDC/RBAC y variables/fixtures, habilitar CD y ejecutar los workflows seleccionando el tag. La aceptación cloud incluye login, Sery streaming, PDF/embeddings, notificaciones y recuperación. Hasta esa evidencia, cloud no está aceptado.
 
-Son verificaciones locales/de contrato, no una demostración de funcionamiento de Managed Identity, red, cuotas, Key Vault, Service Bus o Blob en cloud. Los workflows aún no se han ejecutado en GitHub con estos cambios.
+Son verificaciones locales/de contrato, no una demostración de funcionamiento de Managed Identity, red, cuotas, Key Vault, Service Bus o Blob en cloud. Tras publicar los commits de implementación, CI y CodeQL terminaron en verde en ambos repositorios; consultar los checks de cada nuevo commit y PR, no reutilizar ese resultado para una revisión posterior.
 
 ## Checklist cloud pendiente (no ejecutado)
 

@@ -68,6 +68,14 @@ function Assert-PrivateParameters {
     }
 }
 
+function Assert-AppServiceCapacity {
+    param([Parameter(Mandatory)] $Validation)
+    if ($Validation.status -ne 'Success' -or $Validation.error) {
+        $code = if ($Validation.error) { $Validation.error.code } else { 'Unverified' }
+        throw "App Service Linux B2 validation failed: $code. Resolve the quota/capacity issue before provisioning."
+    }
+}
+
 function Assert-ReleaseTag {
     param([Parameter(Mandatory)][string] $Tag)
     if ($Tag -cnotmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { throw 'An explicit vMAJOR.MINOR.PATCH release tag is required.' }
