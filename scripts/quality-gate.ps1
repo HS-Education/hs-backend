@@ -1,11 +1,11 @@
-param([switch]$SkipSmoke, [switch]$RunLoad, [switch]$RunCapacity, [switch]$RunMalware, [switch]$RunDast, [switch]$DockerBackend, [switch]$SkipDependencyAudit)
+param([switch]$SkipSmoke, [switch]$RunLoad, [switch]$RunCapacity, [switch]$RunMalware, [switch]$RunDast, [switch]$DockerBackend, [switch]$SkipDependencyAudit, [string]$MavenRepository)
 
 $ErrorActionPreference = 'Stop'
 $backendRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $frontRoot = (Resolve-Path (Join-Path $backendRoot '..\hs-tesis-front')).Path
 $python = Join-Path $backendRoot 'ai-service\.venv\Scripts\python.exe'
 $composeFile = Join-Path $PSScriptRoot 'compose.quality-gate.yaml'
-$mavenRepository = Join-Path $env:USERPROFILE '.m2\repository'
+$mavenRepository = if ($MavenRepository) { [IO.Path]::GetFullPath($MavenRepository) } else { Join-Path $env:USERPROFILE '.m2\repository' }
 if ($SkipSmoke -and $RunLoad) { throw '-RunLoad requires the isolated smoke environment.' }
 if ($SkipSmoke -and $RunCapacity) { throw '-RunCapacity requires the isolated smoke environment.' }
 if ($SkipSmoke -and $RunMalware) { throw '-RunMalware requires the isolated smoke environment.' }
@@ -71,11 +71,11 @@ try {
 
 Push-Location $frontRoot
 try {
-    & (Join-Path $frontRoot 'node_modules\.bin\vitest.cmd') run --configLoader runner
+    & node (Join-Path $frontRoot 'node_modules\vitest\vitest.mjs') run --configLoader runner
     Assert-Success 'Angular unit tests'
     & node (Join-Path $frontRoot 'scripts\check-i18n.cjs')
     Assert-Success 'Translation key check'
-    & (Join-Path $frontRoot 'node_modules\.bin\ng.cmd') build
+    & node (Join-Path $frontRoot 'node_modules\@angular\cli\bin\ng.js') build
     Assert-Success 'Angular production build'
 } finally { Pop-Location }
 
@@ -236,9 +236,9 @@ try {
     Push-Location $frontRoot
     try {
         $env:PLAYWRIGHT_JUNIT_OUTPUT_FILE = Join-Path $tempDir 'playwright-junit.xml'
-        & (Join-Path $frontRoot 'node_modules\.bin\playwright.cmd') install chromium
+        & node (Join-Path $frontRoot 'node_modules\@playwright\test\cli.js') install chromium
         Assert-Success 'Chromium installation'
-        & (Join-Path $frontRoot 'node_modules\.bin\playwright.cmd') test
+        & node (Join-Path $frontRoot 'node_modules\@playwright\test\cli.js') test
         Assert-Success 'Browser critical journey suite'
     } finally { Pop-Location }
     if ($RunLoad) {
