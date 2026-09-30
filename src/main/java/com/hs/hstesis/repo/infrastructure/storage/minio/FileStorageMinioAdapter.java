@@ -16,6 +16,7 @@ import java.util.HexFormat;
 import java.util.UUID;
 
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.storage.provider", havingValue = "minio", matchIfMissing = true)
 public class FileStorageMinioAdapter implements FileStorageService {
 
     private final MinioClient minioClient;

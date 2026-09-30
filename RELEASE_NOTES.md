@@ -1,3 +1,31 @@
+# Release 0.2.0
+
+## Azure deployment preparation
+
+- Preserve the local PostgreSQL, MinIO and RabbitMQ environment while adding explicit Azure runtime providers.
+- Add managed-identity Blob Storage and Service Bus adapters for Java and Python, including private claim-check results, validation, retries and generation-aware processing.
+- Add Flyway migrations and separate schema-owner migration credentials from runtime database access.
+- Define Students-only Bicep infrastructure in Mexico Central: shared Linux B2, same-origin Java/Angular, separate Python Web App, PostgreSQL Flexible Server, private Blob, Service Bus Standard, Key Vault and telemetry.
+- Add protected manual CD for matching frontend/backend release tags, verified frontend checksums, OIDC and guarded provisioning scripts.
+
+## Security and reliability
+
+- Enforce masked CSRF tokens on unsafe requests in both local and Azure environments, including authentication, uploads and Sery streaming.
+- Harden authentication cookies, trusted origins, unresolved-secret handling and cloud configuration isolation.
+- Keep generated/private parameters and credentials out of version control; preserve the scoped Students subscription guard.
+
+## Release preparation and integration
+
+- Set the backend Maven project version to 0.2.0 and pair it with frontend 0.2.0.
+- Create `release/0.2.0` from the integrated `develop` branch and merge the current `main` history before promotion.
+- The project owner confirmed functional validation from integrated develop before release preparation.
+- Release preparation verification passed: 85 Java unit tests, 6 integration tests and 4 deployment-package tests. Two opt-in ClamAV integration tests were skipped; antivirus cloud is not part of this architecture.
+- Merge the release PR into `main` only after current CI, security checks and review pass; then synchronize `main` back into `develop`.
+- Create a new `v0.2.0` tag on the promoted main commit in each repository. Do not move existing tags.
+- This release prepares deployment; it does not claim that Azure resources, OIDC identity or cloud acceptance have been completed. Keep CD disabled until the subsequent infrastructure/configuration phase is ready.
+
+---
+
 # Release 0.1.1
 
 ## Fixes

@@ -50,11 +50,23 @@ export const options = {
   },
 };
 
+function csrfHeaders() {
+  const response = http.get(`${base}/api/v1/auth/csrf`, { timeout: '5s' });
+  if (response.status !== 200) throw new Error(`CSRF bootstrap failed: HTTP ${response.status}`);
+  const token = response.json('token');
+  if (response.json('headerName') !== 'X-XSRF-TOKEN' || typeof token !== 'string') {
+    throw new Error('Invalid CSRF bootstrap');
+  }
+  // k6 keeps the bootstrap cookie in its per-VU cookie jar.
+  return { 'Content-Type': 'application/json', 'X-XSRF-TOKEN': token };
+}
+
 export function setup() {
+  const headers = csrfHeaders();
   const response = http.post(`${base}/api/v1/auth/sign-in`, JSON.stringify({
     username: __ENV.SMOKE_USERNAME,
     password: __ENV.SMOKE_PASSWORD,
-  }), { headers: { 'Content-Type': 'application/json' }, timeout: '5s' });
+  }), { headers, timeout: '5s' });
   if (response.status !== 200 || !response.cookies.JWT_TOKEN?.[0]?.value) {
     throw new Error(`Isolated login fixture failed: HTTP ${response.status}`);
   }
@@ -75,8 +87,9 @@ export default function (fixture) {
 
 export function signInStress() {
   const identity = loginFixtures[(__VU - 1) % loginFixtures.length];
+  const headers = csrfHeaders();
   const response = http.post(`${base}/api/v1/auth/sign-in`, JSON.stringify(identity), {
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     tags: { workload: 'auth', endpoint: '/api/v1/auth/sign-in' },
     timeout: '5s',
   });

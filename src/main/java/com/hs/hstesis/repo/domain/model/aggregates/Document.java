@@ -51,6 +51,9 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
     @Column(nullable = false, length = 15)
     private DocumentStatus status;
 
+    @Column(nullable = false, columnDefinition = "integer default 1")
+    private int processingGeneration = 1;
+
     @Embedded
     @AttributeOverrides({
             @AttributeOverride(name = "originalFileName", column = @Column(name = "original_file_name", nullable = false)),
@@ -139,13 +142,14 @@ public class Document extends AuditableAbstractAggregateRoot<Document> {
     }
 
     public void confirmUpload() {
-        this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey()));
+        this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey(), processingGeneration));
     }
 
     public boolean requestProcessingRetry() {
         if (this.status != DocumentStatus.FAILED) return false;
         this.status = DocumentStatus.PROCESSING;
-        this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey()));
+        this.processingGeneration++;
+        this.registerEvent(new DocumentUploadedEvent(this, this.getId(), this.getFileStorageInfo().getObjectKey(), processingGeneration));
         return true;
     }
 }
