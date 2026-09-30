@@ -14,6 +14,14 @@ La política Students de esta cuenta bloquea East US/East US 2. Consulta oficial
 
 Reservar aproximadamente **US$60–70/mes para uso pequeño**, sin OpenRouter; no es un tope. La base supera los US$50 iniciales y no demuestra los beneficios gratuitos reales de Students. El budget de US$60 avisa, no detiene recursos. El crédito publicado es de US$100 por 12 meses, no mensual. Confirmar saldo efectivo antes de crear recursos pagos.
 
+### Base por capacidad frente a uso variable
+
+La base de US$55,79 supone recursos mantenidos 730 h y 32 GB provisionados, aunque no entre ningún usuario: B2 US$27,30, cómputo PostgreSQL US$13,65, almacenamiento PostgreSQL US$4,05 y base Service Bus Standard US$10,79. No son cuatro tarifas planas irrevocables: cómputo y namespace se miden por tiempo; el disco se cobra por capacidad provisionada. Java/Angular y Python comparten el único cargo del B2. Detener las Web Apps no detiene la facturación del plan; PostgreSQL detenido deja de facturar cómputo, no almacenamiento, y se reinicia automáticamente después de siete días.
+
+Uso variable según la API de tarifas Mexico Central consultada nuevamente: Blob Hot LRS, primer tramo, US$0,02288/GB-mes (10 GB ≈ US$0,23, más operaciones/transferencia); lecturas US$0,0044/10.000; Key Vault Standard para operaciones US$0,033/10.000; Log Analytics Analytics Logs US$2,53/GB facturable después del tramo gratuito aplicable. También hay operaciones/conexiones Service Bus por encima de lo incluido, respaldos PostgreSQL adicionales, retención extendida/alertas/otros medidores de Monitor y salida de datos. Application Insights basado en workspace usa el mismo Log Analytics: no sumar dos veces su ingestión. OpenRouter es un consumo separado, dependiente del modelo/tokens, no del crédito Azure.
+
+Los beneficios gratuitos concretos de la suscripción no están demostrados y no se descontaron. El usuario pidió esta clasificación antes de aprobar el rango mayor: **aprovisionamiento de pago pendiente de decisión**. No se crearon recursos pagos para comprobar precios.
+
 West US se consultó como alternativa permitida: B2 US$0,036/h, B1ms US$0,022/h y almacenamiento US$0,138/GB-mes, sin una mejora clara frente a Mexico Central. No se eligió por una latencia medida.
 
 ## Referencia previa: East US, no desplegable en esta cuenta

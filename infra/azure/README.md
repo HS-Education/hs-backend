@@ -114,6 +114,8 @@ Son verificaciones locales/de contrato, no una demostración de funcionamiento d
 
 La lectura adicional de las alertas de CodeQL, independiente del resultado de sus jobs, detectó CSRF desactivado en Java y generación de contraseñas con `Math.random()` en Angular. Se corrigieron con protección CSRF real y Web Crypto con muestreo sin sesgo/Fisher-Yates (16 caracteres y cuatro clases). No se descartaron ni suprimieron alertas. La regresión local posterior aprobó 85 pruebas unitarias Java, 6 integraciones y 55 Vitest; tipado de tests, build, configuración de despliegue e i18n aprobados. Verificar también el listado de alertas de la revisión nueva, no solo el estado verde del workflow. El gate admite `-MavenRepository` y usa las CLI Node directamente; `-DockerBackend` evita depender de los sockets del JDK de Windows.
 
+El gate con Java en Docker finalizó satisfactoriamente: **17 escenarios Playwright aprobados** contra servicios/base desechables; carga local autenticada de lectura con 10 usuarios y 200 solicitudes, 0 errores, p95 29,1 ms. Los servicios y datos desechables se retiraron al finalizar; la infraestructura/datos de desarrollo se conservaron. No es una medición de capacidad de Azure, carga representativa de producción ni prueba de OpenRouter real. El primer intento con Java nativo de Windows falló al crear el socket loopback del JDK, antes de poder ejecutar el smoke; no se atribuyó a la aplicación. Los audits de dependencias, ClamAV y DAST no se repitieron en este gate (`-SkipDependencyAudit`, sin opt-in de malware/DAST); no declararlos aprobados en esta ejecución.
+
 ## Checklist cloud pendiente (no ejecutado)
 
 - Cuotas, SKU regional, registro de providers y RBAC; saldo/beneficios Students efectivos; alertas de presupuesto.
