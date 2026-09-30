@@ -15,7 +15,8 @@ resource backendFederation 'Microsoft.ManagedIdentity/userAssignedIdentities/fed
   name: 'hs-backend-azure-students'
   properties: {
     issuer: 'https://token.actions.githubusercontent.com'
-    subject: 'repo:HS-Education/hs-backend:environment:azure-students'
+    // Match GitHub's immutable owner/repository IDs, not a reusable namespace.
+    subject: 'repo:HS-Education@334800057/hs-backend@1170255521:environment:azure-students'
     audiences: [
       'api://AzureADTokenExchange'
     ]
