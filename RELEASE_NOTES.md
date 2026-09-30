@@ -1,3 +1,24 @@
+# Release 0.2.1
+
+## Azure deployment operations
+
+- Configure GitHub OIDC with a dedicated user-assigned managed identity instead of requiring Microsoft Entra application registration permissions.
+- Validate the expected federated trust and preserve scoped deployment permissions in the Azure for Students subscription.
+- Run backend CI and CodeQL on `fix/**` branches.
+- Document protected manual deployment, frontend packaging, backend deployment and browser smoke execution.
+- These changes affect deployment operations; they do not change application behavior.
+
+## Release preparation and integration
+
+- Set the backend Maven project version to 0.2.1.
+- Create `release/0.2.1` from the integrated `develop` branch after the project owner confirmed local validation.
+- Open the release pull request into `main`; wait for CI, security checks and approval before merging.
+- Synchronize `main` back into `develop` after promotion and publish a new `v0.2.1` tag on the final main commit. Do not move existing tags.
+- The current Azure CD requires matching backend and frontend tags and a trusted frontend release artifact. Frontend 0.2.1 preparation remains a separate step; this backend branch does not prepare it.
+- No application deployment or cloud functional acceptance is claimed by this release preparation.
+
+---
+
 # Release 0.2.0
 
 ## Azure deployment preparation
