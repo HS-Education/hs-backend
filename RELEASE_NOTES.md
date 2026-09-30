@@ -1,3 +1,25 @@
+# Release 0.2.2
+
+## Protected tag-driven Azure deployment
+
+- Start backend CD automatically when a stable release tag is pushed, while retaining explicit manual recovery and the CD enable gate.
+- Wait up to 30 minutes for both matching frontend release assets before verifying their tag, main ancestry, commit and checksum.
+- Preserve environment approval before OIDC authentication, database migrations and Web App deployment.
+- Run browser smoke automatically only after successful deployment, using the frontend source corresponding to the packaged manifest.
+- Require authorized encrypted smoke credentials in the backend environment before cloud application changes; keep Azure roles and self-approval restrictions unchanged.
+- Keep smoke destination guards, bounded waits and job timeouts; do not automatically roll back or claim cloud acceptance after a failed smoke.
+
+## Release preparation and integration
+
+- Set the backend Maven project version to 0.2.2 and pair it with frontend 0.2.2.
+- Create `release/0.2.2` from integrated `develop` after the tag-driven CD feature was merged.
+- Open the release pull request into `main`; wait for CI, security checks and approval before merging, then synchronize `main` back into `develop`.
+- The collaborator publishes the new `v0.2.2` tags on the final main commits, frontend first; the designated reviewer approves the protected environments without self-approval or bypass.
+- Preserve existing tags and release assets. Publishing this release branch does not trigger CD; the new tag does so only after integration.
+- Cloud load testing, document processing, Sery, notifications and recovery acceptance remain separate from this release preparation and its browser smoke.
+
+---
+
 # Release 0.2.1
 
 ## Azure deployment operations
