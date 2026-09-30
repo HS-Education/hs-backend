@@ -2,6 +2,8 @@
 
 Estado: código, adaptadores, plantillas y workflows preparados localmente. **No hay recursos creados ni despliegue cloud validado.** No se cambiaron los contenedores, puertos, volúmenes ni datos del entorno de desarrollo. Revisar [costos](COSTS.md) antes de aprobar aprovisionamiento.
 
+Release 0.2.0: las features ya se integraron a develop en ambos repositorios y el usuario confirmó la validación local desde develop. Se preparó `release/0.2.0` desde esos develops, incorporando el historial vigente de main sin conflictos. El siguiente PR es **release/0.2.0 → main en cada repo**, no otro PR de feature. No se crearon tags ni recursos Azure; CD continúa deshabilitado. Tras ambos merges, sincronizar main → develop y publicar los tags nuevos antes de iniciar la fase cloud.
+
 ## Dos entornos, la misma aplicación
 
 | Componente | Local, como antes | Azure, perfil explícito |
@@ -73,7 +75,7 @@ What-if necesita sesión/RBAC/providers adecuados, pero no crea recursos por dis
 
 Los workflows manuales deben ejecutarse **seleccionando el nuevo tag como ref**, no main ni una feature; el input `release_tag` debe coincidir con esa ref. Los environments preparados con `Configure-GitHubEnvironment.ps1` exigen revisión de `sebaditas`, sin bypass administrativo y sin autoaprobación: el compañero inicia el workflow y `sebaditas` aprueba. La variable CD permanece false hasta que existan infraestructura, OIDC, variables, secretos y cuentas de prueba. No crear/mover un tag antiguo para hacer visible un workflow nuevo: primero integrarlo a main mediante PR.
 
-### Handoff de los PR actuales
+### Handoff de los PR de implementación (integrados antes de la release)
 
 Las ramas publicadas se llaman `feature/azure-students-deployment` en ambos repositorios. El autor/compañero crea manualmente los dos PR con **base `develop`**, usando un título en inglés como `feat(azure): prepare Students deployment and gated CD`:
 
@@ -82,7 +84,7 @@ Las ramas publicadas se llaman `feature/azure-students-deployment` en ambos repo
 
 Revisar el SHA actual y los checks del propio PR, no reutilizar el verde de un push anterior. Mantener los commits de implementación por responsabilidad. Aprobar/fusionar los dos PR y actualizar ambas copias locales con `git fetch origin`, `git switch develop`, `git pull --ff-only origin develop` (solo con árbol limpio). No mezclar frontend antiguo con el nuevo contrato CSRF del backend.
 
-Solo entonces preparar `release/<nueva-versión>` desde el develop actualizado de cada repo; se propone **0.2.0**, todavía sin crear ni etiquetar. Actualizar la versión de cada paquete y los metadatos aplicables en un commit `chore(release): prepare <versión>`. Antes del PR a main, comprobar que origin/main sea ancestro de release; si no lo es, integrar el main vigente mediante merge en la rama release, resolver/verificar y volver a publicar esa rama. No rebase/force-push ni cambio directo en main. El usuario/compañero abre los PR release → main; esperar checks y aprobación antes de continuar con sincronización/tags y la fase Azure.
+Tras integrar esas features se seleccionó **0.2.0** y se prepararon ambas ramas desde develop, actualizando la versión de cada paquete y sus notas en un commit `chore(release): prepare 0.2.0`. El main vigente se incorporó por merge, sin rebase/force-push ni cambio directo en main. El usuario/compañero abre los PR release → main; esperar checks y aprobación antes de continuar con sincronización/tags y la fase Azure. Si main cambia después de preparar la release, actualizar de nuevo la rama release y esperar los checks del nuevo SHA.
 
 Basic B2 no tiene deployment slots: puede haber interrupción breve, no se promete blue/green. Mantener el artefacto anterior; rollback de app solo si es compatible con el esquema vigente. No deshacer la BD con scripts destructivos. Para cambios incompatibles aplicar expand/contract y respaldo/restore probado.
 
