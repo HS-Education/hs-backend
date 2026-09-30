@@ -18,12 +18,12 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from minio import Minio
 from openrouter_contract import FEEDBACK_FORMAT, QUIZ_FORMAT, create_client
 from pydantic import BaseModel, Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from worker_settings import Settings, load_settings
+from infrastructure import MinioDocumentStorage, AzureDocumentStorage, AzureDocumentConsumer, validate_job
 
 DOCUMENT_PROCESSING_QUEUE = "document_processing_queue"
 EMBEDDINGS_READY_QUEUE = "embeddings_ready_queue"
 DOCUMENT_PROCESSING_FAILED_QUEUE = "document_processing_failed_queue"
-provider_capacity = CapacityLimit(4)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,26 +32,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)
-
-    worker_api_key: str
-    minio_endpoint: str
-    minio_root_user: str
-    minio_root_password: str
-    minio_bucket_name: str
-    rabbitmq_host: str
-    rabbitmq_user: str
-    rabbitmq_password: str
-    rabbitmq_port: str
-    openrouter_api_key: str
-    openrouter_chat_model: str = "openai/gpt-oss-120b"
-    openrouter_embedding_model: str = "voyageai/voyage-4-lite"
-    openrouter_http_referer: str = "http://localhost:4200"
-    openrouter_app_title: str = "HS Education"
-    embedding_dimensions: int = 1024
-
-settings = Settings()
+settings = load_settings()
+provider_capacity = CapacityLimit(settings.provider_max_concurrency)
+if settings.app_env == "azure" and settings.applicationinsights_connection_string:
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    configure_azure_monitor(connection_string=settings.applicationinsights_connection_string,
+                            sampling_ratio=0.1, enable_live_metrics=False)
 
 
 class EmbedQueryRequest(BaseModel):
@@ -130,7 +116,24 @@ minio_client = Minio(
     access_key=settings.minio_root_user,
     secret_key=settings.minio_root_password,
     secure=False,
-)
+) if settings.app_env == "local" else None
+document_storage = (MinioDocumentStorage(minio_client, settings.minio_bucket_name)
+                    if settings.app_env == "local" else AzureDocumentStorage(settings))
+
+
+def process_azure_document(message):
+    document_id, generation, object_key = validate_job(message)
+    chunks = extract_chunks(document_storage.read_document(object_key))
+    for index in range(0, len(chunks), 50):
+        batch = chunks[index:index + 50]
+        embeddings = get_embeddings([chunk["content"] for chunk in batch])
+        for metadata, vector in zip(batch, embeddings, strict=True):
+            metadata["embedding"] = vector
+    return {"documentId": document_id, "generation": generation, "chunks": chunks}
+
+
+azure_consumer = (AzureDocumentConsumer(settings, document_storage, process_azure_document)
+                  if settings.app_env == "azure" else None)
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
     if x_api_key != settings.worker_api_key:
@@ -323,8 +326,26 @@ def call_openrouter_generate_stream(system_prompt: str, messages: list[dict], ma
 
 @app.on_event("startup")
 def startup_event() -> None:
-    rabbit_thread = threading.Thread(target=start_rabbitmq_consumer, daemon=True)
-    rabbit_thread.start()
+    consumer_thread = threading.Thread(target=(azure_consumer.run if azure_consumer else start_rabbitmq_consumer), daemon=True)
+    consumer_thread.start()
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    if azure_consumer:
+        azure_consumer.stop()
+
+
+@app.get("/livez")
+def liveness():
+    return {"status": "ok"}
+
+
+@app.get("/readyz", dependencies=[Depends(require_api_key)])
+def readiness():
+    if azure_consumer and not azure_consumer.connected.is_set():
+        raise HTTPException(status_code=503, detail="Worker dependencies are not ready")
+    return {"status": "ok"}
 
 
 @app.get("/health", dependencies=[Depends(require_api_key)])
