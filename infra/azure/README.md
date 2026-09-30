@@ -46,7 +46,9 @@ La consulta del 29/09/2026 a `sys.regionrestriction` permite solamente `westus`,
 
 La API regional de usos devolvió un resumen `*` con 0/0; no se interpretó como prueba suficiente de bloqueo. La API específica `Microsoft.Web/validate` respondió **Success para B2 Linux, capacidad 1 en Mexico Central**, sin crear el grupo ni el plan. `Test-AppServiceCapacity.ps1` repite esa comprobación antes de cada Create: un what-if exitoso no reemplaza la validación del proveedor. La capacidad puede variar posteriormente. Se solicitó el registro de Microsoft.Quota para consultas, sin solicitar aumentos ni cambiar la oferta.
 
-## Aprovisionamiento futuro, solo tras aprobar costo
+## Aprovisionamiento futuro, tras integración GitFlow
+
+Decisión del 30/09/2026: se mantiene Linux B2 compartido y la arquitectura descrita arriba, con base estimada de US$55,79/mes en Mexico Central. No se aplica B1 ni apagado programado de tres horas. El usuario confirmó primero commits/ramas y después recursos/CD; no ejecutar `Create`, configurar la identidad OIDC ni habilitar CD en esta fase. El budget de US$60 de la plantilla es una alerta, no un tope ni una garantía del costo final. Los costos variables y OpenRouter se mantienen separados.
 
 Copiar `parameters.example.json` a `parameters.local.json` (ignorado), completar valores fuertes distintos y proteger el archivo local. No compartirlo, no adjuntarlo a PR ni imprimirlo. API keys, passwords y JWT son secretos aunque coloquialmente se llamen llaves. Para repetir un despliegue reutilizar valores existentes; no rotar contraseñas/keys accidentalmente.
 
@@ -62,14 +64,25 @@ What-if necesita sesión/RBAC/providers adecuados, pero no crea recursos por dis
 
 1. Ambas ramas `feature/azure-students-deployment` → PR a `develop`, CI de tests/seguridad y revisión humana.
 2. Validar conjuntamente; abrir nueva `release/<versión>` desde develop, PR a main en ambos repos. No reusar ni mover `v0.1.1`: ese tag no incluye esta implementación.
-3. Integrar release de vuelta a develop y publicar el mismo nuevo tag semántico en ambos repositorios.
-4. Crear el GitHub Environment `azure-students`, aprobar revisores y restringir despliegues a tags de release. Activar `AZURE_CD_ENABLED=true` solo tras provisionar/configurar.
+3. Después del merge de release a main, abrir PR de sincronización main → develop en ambos repos, para conservar también el commit de merge de main. Publicar el mismo nuevo tag semántico sobre el commit de release integrado a main en cada repo; no mover tags existentes.
+4. Revisar el GitHub Environment `azure-students` ya preparado, sus revisores y su restricción a tags. En la fase posterior: validar parámetros privados/Students/capacidad/what-if, crear recursos mediante CLI+Bicep y configurar OIDC/RBAC/variables/secretos/fixtures. Activar `AZURE_CD_ENABLED=true` solo tras esas comprobaciones.
 5. Ejecutar **Frontend Azure release** con el tag y modo app-service: tests/build → asset `frontend.zip` + manifiesto SHA256 en GitHub Release. No modifica la API.
 6. Ejecutar **Backend Azure CD** con el mismo tag: verifica que ambos commits están en main, comprueba tag/SHA256 del frontend, ejecuta Java/Python/integración y empaqueta Angular dentro del JAR y el worker mediante allowlist.
 7. Aprobación del environment → login OIDC → guard Students → Flyway con dueño DB y firewall temporal → worker → Java/Angular → health/deep-link/runtime checks.
 8. Ejecutar **Azure browser smoke** en front para login, cookies Secure/HttpOnly y recarga de ruta. Antes de declarar cloud listo, completar el checklist siguiente.
 
 Los workflows manuales deben ejecutarse **seleccionando el nuevo tag como ref**, no main ni una feature; el input `release_tag` debe coincidir con esa ref. Los environments preparados con `Configure-GitHubEnvironment.ps1` exigen revisión de `sebaditas`, sin bypass administrativo y sin autoaprobación: el compañero inicia el workflow y `sebaditas` aprueba. La variable CD permanece false hasta que existan infraestructura, OIDC, variables, secretos y cuentas de prueba. No crear/mover un tag antiguo para hacer visible un workflow nuevo: primero integrarlo a main mediante PR.
+
+### Handoff de los PR actuales
+
+Las ramas publicadas se llaman `feature/azure-students-deployment` en ambos repositorios. El autor/compañero crea manualmente los dos PR con **base `develop`**, usando un título en inglés como `feat(azure): prepare Students deployment and gated CD`:
+
+- Backend: https://github.com/HS-Education/hs-backend/compare/develop...feature/azure-students-deployment?expand=1
+- Frontend: https://github.com/HS-Education/hs-front/compare/develop...feature/azure-students-deployment?expand=1
+
+Revisar el SHA actual y los checks del propio PR, no reutilizar el verde de un push anterior. Mantener los commits de implementación por responsabilidad. Aprobar/fusionar los dos PR y actualizar ambas copias locales con `git fetch origin`, `git switch develop`, `git pull --ff-only origin develop` (solo con árbol limpio). No mezclar frontend antiguo con el nuevo contrato CSRF del backend.
+
+Solo entonces preparar `release/<nueva-versión>` desde el develop actualizado de cada repo; se propone **0.2.0**, todavía sin crear ni etiquetar. Actualizar la versión de cada paquete y los metadatos aplicables en un commit `chore(release): prepare <versión>`. Antes del PR a main, comprobar que origin/main sea ancestro de release; si no lo es, integrar el main vigente mediante merge en la rama release, resolver/verificar y volver a publicar esa rama. No rebase/force-push ni cambio directo en main. El usuario/compañero abre los PR release → main; esperar checks y aprobación antes de continuar con sincronización/tags y la fase Azure.
 
 Basic B2 no tiene deployment slots: puede haber interrupción breve, no se promete blue/green. Mantener el artefacto anterior; rollback de app solo si es compatible con el esquema vigente. No deshacer la BD con scripts destructivos. Para cambios incompatibles aplicar expand/contract y respaldo/restore probado.
 
