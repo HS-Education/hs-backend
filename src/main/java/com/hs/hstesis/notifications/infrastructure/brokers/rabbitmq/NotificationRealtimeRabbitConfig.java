@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Qualifier;
 
 @Configuration
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.messaging.provider", havingValue = "rabbitmq", matchIfMissing = true)
 public class NotificationRealtimeRabbitConfig {
 
     public static final String EXCHANGE_NAME = "hs.notifications.realtime";

@@ -27,6 +27,12 @@ import java.util.List;
 @Configuration
 @EnableMethodSecurity
 public class WebSecurityConfiguration {
+    @org.springframework.beans.factory.annotation.Value("${app.auth.allowed-origins:http://localhost:8080,http://localhost:4200}")
+    private List<String> allowedOrigins;
+    @org.springframework.beans.factory.annotation.Value("${app.auth.origin-check-enabled:false}")
+    private boolean originCheckEnabled;
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.enabled:false}")
+    private boolean frontendEnabled;
 
     private final UserDetailsService userDetailsService;
     private final BearerTokenService tokenService;
@@ -80,7 +86,10 @@ public class WebSecurityConfiguration {
     public SecurityFilterChain filterChain(HttpSecurity http) {
         http.cors(configurer -> configurer.configurationSource(request -> {
             var cors = new CorsConfiguration();
-            cors.setAllowedOrigins(List.of("http://localhost:8080", "http://localhost:4200"));
+            if (allowedOrigins.isEmpty() || allowedOrigins.contains("*")) {
+                throw new IllegalArgumentException("Explicit frontend origins are required");
+            }
+            cors.setAllowedOrigins(allowedOrigins);
             cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
             cors.setAllowedHeaders(List.of("*"));
             cors.setAllowCredentials(true);
@@ -94,12 +103,20 @@ public class WebSecurityConfiguration {
                         .accessDeniedHandler(customAccessDeniedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(request -> frontendEnabled && "GET".equals(request.getMethod())
+                                && !request.getRequestURI().startsWith("/api/")
+                                && !request.getRequestURI().startsWith("/actuator")).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .anyRequest().authenticated()
                 );
 
         http.addFilterBefore(authorizationRequestFilter(), UsernamePasswordAuthenticationFilter.class);
+        if (originCheckEnabled) {
+            http.addFilterBefore(new com.hs.hstesis.iam.infrastructure.authorization.sfs.pipeline.TrustedOriginFilter(
+                    new java.util.HashSet<>(allowedOrigins)), UsernamePasswordAuthenticationFilter.class);
+        }
 
         return http.build();
     }

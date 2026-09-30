@@ -10,7 +10,8 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
-public class NotificationRealtimeRabbitAdapter {
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "app.messaging.provider", havingValue = "rabbitmq", matchIfMissing = true)
+public class NotificationRealtimeRabbitAdapter implements com.hs.hstesis.notifications.application.internal.outboundservices.NotificationRealtimePublisher {
 
     private static final Logger log = LoggerFactory.getLogger(NotificationRealtimeRabbitAdapter.class);
 

@@ -4,7 +4,7 @@ import com.hs.hstesis.iam.domain.model.entity.RefreshToken;
 import com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories.RefreshTokenRepository;
 import com.hs.hstesis.iam.infrastructure.persistance.jpa.repositories.UserRepository;
 import com.hs.hstesis.iam.infrastructure.tokens.jwt.RefreshTokenService;
-import io.github.cdimascio.dotenv.Dotenv;
+import org.springframework.beans.factory.annotation.Value;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
@@ -18,9 +18,8 @@ import java.util.UUID;
 @Service
 public class RefreshTokenServiceImpl implements RefreshTokenService {
 
-    private final Dotenv dotenv = Dotenv.configure().load();
-
-    private final Long refreshTokenDurationMs = Long.parseLong(Objects.requireNonNull(dotenv.get("JWT_REFRESH_EXPIRATION_DAYS"))) * 24 * 60 * 60 * 1000;
+    @Value("${jwt.refresh-expiration-days:7}")
+    private long refreshExpirationDays = 7;
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserRepository userRepository;
@@ -43,7 +42,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
 
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.setUser(user);
-        refreshToken.setExpiryDate(Instant.now().plusMillis(refreshTokenDurationMs));
+        refreshToken.setExpiryDate(Instant.now().plusSeconds(refreshExpirationDays * 86400L));
         refreshToken.setToken(UUID.randomUUID().toString());
 
         return refreshTokenRepository.save(refreshToken);

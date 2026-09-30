@@ -3,7 +3,7 @@ package com.hs.hstesis.iam.infrastructure.tokens.jwt.services;
 import com.hs.hstesis.iam.domain.model.aggregates.User;
 import com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl;
 import com.hs.hstesis.iam.infrastructure.tokens.jwt.BearerTokenService;
-import io.github.cdimascio.dotenv.Dotenv;
+import org.springframework.beans.factory.annotation.Value;
 import io.jsonwebtoken.Jwts;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,13 +24,13 @@ public class TokenServiceImpl implements BearerTokenService {
 
     private final Logger LOGGER = LoggerFactory.getLogger(TokenServiceImpl.class);
     private final SecretKey signingKey;
-    private static final Dotenv dotenv = Dotenv.configure().load();
 
     public TokenServiceImpl(SecretKey signingKey) {
         this.signingKey = signingKey;
     }
 
-    private final int expirationMinutes = Integer.parseInt(Objects.requireNonNull(dotenv.get("JWT_EXPIRATION_MINUTES")));
+    @Value("${jwt.expiration-minutes:60}")
+    private int expirationMinutes = 60;
 
     private String buildTokenWithDefaultParameters(String username, String userId, List<String> roles) {
         Date issuedAt = new Date();

@@ -5,7 +5,7 @@ import com.hs.hstesis.notifications.domain.model.commands.CreateNotificationComm
 import com.hs.hstesis.notifications.domain.model.commands.MarkNotificationAsReadCommand;
 import com.hs.hstesis.notifications.domain.services.NotificationCommandService;
 import com.hs.hstesis.notifications.infrastructure.persistence.jpa.repositories.NotificationRepository;
-import com.hs.hstesis.notifications.infrastructure.brokers.rabbitmq.NotificationRealtimeRabbitAdapter;
+import com.hs.hstesis.notifications.application.internal.outboundservices.NotificationRealtimePublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,12 +14,12 @@ public class NotificationCommandServiceImpl implements NotificationCommandServic
 
     private final NotificationRepository notificationRepository;
     private final com.hs.hstesis.notifications.infrastructure.persistence.jpa.repositories.NotificationPreferenceRepository notificationPreferenceRepository;
-    private final NotificationRealtimeRabbitAdapter realtimeAdapter;
+    private final NotificationRealtimePublisher realtimeAdapter;
 
     public NotificationCommandServiceImpl(
             NotificationRepository notificationRepository,
             com.hs.hstesis.notifications.infrastructure.persistence.jpa.repositories.NotificationPreferenceRepository notificationPreferenceRepository,
-            NotificationRealtimeRabbitAdapter realtimeAdapter) {
+            NotificationRealtimePublisher realtimeAdapter) {
         this.notificationRepository = notificationRepository;
         this.notificationPreferenceRepository = notificationPreferenceRepository;
         this.realtimeAdapter = realtimeAdapter;

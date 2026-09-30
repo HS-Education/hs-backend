@@ -13,8 +13,15 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class HsTesisApplication {
 
     public static void main(String[] args) {
-        Dotenv dotenv = Dotenv.load();
-        dotenv.entries().forEach(entry -> System.setProperty(entry.getKey(), entry.getValue()));
+        String profiles = System.getenv().getOrDefault("SPRING_PROFILES_ACTIVE", "local");
+        if (!java.util.Arrays.asList(profiles.split(",")).contains("azure")) {
+            Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
+            dotenv.entries().forEach(entry -> {
+                if (System.getenv(entry.getKey()) == null && System.getProperty(entry.getKey()) == null) {
+                    System.setProperty(entry.getKey(), entry.getValue());
+                }
+            });
+        }
         SpringApplication.run(HsTesisApplication.class, args);
     }
 }
