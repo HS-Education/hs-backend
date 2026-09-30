@@ -1,8 +1,8 @@
 # Azure Students: implementación local y despliegue separado
 
-Estado: código, adaptadores, plantillas y workflows preparados localmente. **No hay recursos creados ni despliegue cloud validado.** No se cambiaron los contenedores, puertos, volúmenes ni datos del entorno de desarrollo. Revisar [costos](COSTS.md) antes de aprobar aprovisionamiento.
+Estado al 30/09/2026: **infraestructura aprovisionada en Azure for Students, Mexico Central; aplicación cloud todavía no desplegada ni validada**. El plan Linux B2, las dos Web Apps, PostgreSQL 16 B1ms, Blob privado, Service Bus Standard, Key Vault, observabilidad y presupuesto se crearon mediante Bicep. Las seis referencias de Key Vault están resueltas. OIDC usa una identidad administrada separada con seis asignaciones RBAC acotadas. Los environments de GitHub tienen destinos y secretos cifrados, y `AZURE_CD_ENABLED=true` está verificado en ambos repositorios por autorización del usuario; se conservan revisión humana, tags `v*`, sin autoaprobación ni bypass. No se iniciaron workflows de despliegue ni de smoke. Los recursos de pago ya consumen crédito. El presupuesto mensual de US$60 solo alerta al 80% y al 100%. No se cambiaron los contenedores, puertos, volúmenes ni datos locales.
 
-Release 0.2.0: las features ya se integraron a develop en ambos repositorios y el usuario confirmó la validación local desde develop. Se preparó `release/0.2.0` desde esos develops, incorporando el historial vigente de main sin conflictos. El siguiente PR es **release/0.2.0 → main en cada repo**, no otro PR de feature. No se crearon tags ni recursos Azure; CD continúa deshabilitado. Tras ambos merges, sincronizar main → develop y publicar los tags nuevos antes de iniciar la fase cloud.
+Release 0.2.0: integrada a main en ambos repositorios, sincronizada hacia develop y publicada con los tags `v0.2.0`. Siguiente fase: ejecutar **Frontend Azure release** (`app-service`), después **Backend Azure CD** y finalmente **Azure browser smoke**, seleccionando `v0.2.0` como ref; los dos primeros también requieren ese valor en `release_tag`, el smoke no tiene ese input. El compañero inicia las ejecuciones y `sebaditas` aprueba. La corrección del aprovisionamiento OIDC afecta scripts operativos, documentación, pruebas y filtros de CI para ramas `fix/**`: no modifica el código de aplicación etiquetado ni mueve tags existentes. El CD debe completar Flyway y el empaquetado Java/Angular antes de aceptar login, documentos, colas, notificaciones o Sery en Azure. Los resultados del preflight y preparación de ramas documentados más abajo corresponden a fases anteriores.
 
 ## Dos entornos, la misma aplicación
 
@@ -50,7 +50,7 @@ La API regional de usos devolvió un resumen `*` con 0/0; no se interpretó como
 
 ## Aprovisionamiento futuro, tras integración GitFlow
 
-Decisión del 30/09/2026: se mantiene Linux B2 compartido y la arquitectura descrita arriba, con base estimada de US$55,79/mes en Mexico Central. No se aplica B1 ni apagado programado de tres horas. El usuario confirmó primero commits/ramas y después recursos/CD; no ejecutar `Create`, configurar la identidad OIDC ni habilitar CD en esta fase. El budget de US$60 de la plantilla es una alerta, no un tope ni una garantía del costo final. Los costos variables y OpenRouter se mantienen separados.
+Decisión inicial del 30/09/2026: se mantiene Linux B2 compartido y la arquitectura descrita arriba, con base estimada de US$55,79/mes en Mexico Central. No se aplica B1 ni apagado programado de tres horas. El flujo commits/ramas/release se completó antes del aprovisionamiento; posteriormente el usuario autorizó crear recursos y configurar OIDC. El budget de US$60 de la plantilla es una alerta, no un tope ni una garantía del costo final. Los costos variables y OpenRouter se mantienen separados; la estimación no equivale a una factura ni a un saldo de crédito verificado.
 
 Copiar `parameters.example.json` a `parameters.local.json` (ignorado), completar valores fuertes distintos y proteger el archivo local. No compartirlo, no adjuntarlo a PR ni imprimirlo. API keys, passwords y JWT son secretos aunque coloquialmente se llamen llaves. Para repetir un despliegue reutilizar valores existentes; no rotar contraseñas/keys accidentalmente.
 
@@ -73,7 +73,38 @@ What-if necesita sesión/RBAC/providers adecuados, pero no crea recursos por dis
 7. Aprobación del environment → login OIDC → guard Students → Flyway con dueño DB y firewall temporal → worker → Java/Angular → health/deep-link/runtime checks.
 8. Ejecutar **Azure browser smoke** en front para login, cookies Secure/HttpOnly y recarga de ruta. Antes de declarar cloud listo, completar el checklist siguiente.
 
-Los workflows manuales deben ejecutarse **seleccionando el nuevo tag como ref**, no main ni una feature; el input `release_tag` debe coincidir con esa ref. Los environments preparados con `Configure-GitHubEnvironment.ps1` exigen revisión de `sebaditas`, sin bypass administrativo y sin autoaprobación: el compañero inicia el workflow y `sebaditas` aprueba. La variable CD permanece false hasta que existan infraestructura, OIDC, variables, secretos y cuentas de prueba. No crear/mover un tag antiguo para hacer visible un workflow nuevo: primero integrarlo a main mediante PR.
+Los workflows manuales deben ejecutarse **seleccionando el tag como ref**, no main ni una feature; el input `release_tag` de release/CD debe coincidir con esa ref. Los environments preparados con `Configure-GitHubEnvironment.ps1` exigen revisión de `sebaditas`, sin bypass administrativo y sin autoaprobación: el compañero inicia el workflow y `sebaditas` aprueba. El gate solo se habilita tras verificar infraestructura, OIDC, variables, secretos y credenciales autorizadas; habilitarlo no inicia un despliegue. No crear/mover un tag antiguo para hacer visible un workflow nuevo: primero integrarlo a main mediante PR.
+
+### Primer despliegue manual de v0.2.0
+
+La infraestructura y el gate ya están preparados. El compañero inicia cada ejecución desde su propia cuenta con acceso al repo; `sebaditas` aprueba el environment `azure-students` en GitHub cuando aparezca **Review deployments**. No ejecutar las tres etapas en paralelo: esperar el resultado satisfactorio de la anterior. El verify del backend corre antes de solicitar aprobación para el job deploy.
+
+| Orden | Repositorio / workflow | Ref e inputs | Resultado |
+| --- | --- | --- | --- |
+| 1 | hs-front / Frontend Azure release | ref `v0.2.0`, `release_tag=v0.2.0`, `hosting=app-service` | GitHub Release con `frontend.zip` y manifiesto SHA256; no despliega sobre la API |
+| 2 | hs-backend / Backend Azure CD | ref `v0.2.0`, `release_tag=v0.2.0` | Verificación, OIDC, Flyway, worker, Java/Angular y health checks |
+| 3 | hs-front / Azure browser smoke | ref `v0.2.0`, sin inputs adicionales | Tres escenarios de navegación anónima, perfil protegido y login/cookies/recarga/logout |
+
+Si GitHub no ofrece el tag en el selector de la interfaz, el compañero puede fijarlo explícitamente con GitHub CLI autenticado en su cuenta. Ejecutar cada comando solo cuando la etapa anterior haya pasado:
+
+```powershell
+gh auth status
+gh workflow run azure-release.yml --repo HS-Education/hs-front --ref v0.2.0 -f release_tag=v0.2.0 -f hosting=app-service
+```
+
+```powershell
+gh workflow run azure-cd.yml --repo HS-Education/hs-backend --ref v0.2.0 -f release_tag=v0.2.0
+```
+
+```powershell
+gh workflow run azure-smoke.yml --repo HS-Education/hs-front --ref v0.2.0
+```
+
+[`gh workflow run --ref`](https://cli.github.com/manual/gh_workflow_run) admite una rama o un tag. No añadir `release_tag` al smoke: ese workflow no define inputs. No sobrescribir assets ni recrear tags para reintentos. Una ejecución fallida debe diagnosticarse antes de continuar a la siguiente etapa.
+
+La corrección operativa sigue el flujo `fix/azure-cd-managed-identity` → PR a `develop` → CI/revisión → futura release → `main` → sincronización hacia `develop` → nuevo tag si se publica esa release. No se integra directamente a una rama protegida. El primer CD de `v0.2.0` puede usar la identidad ya aprovisionada: sus workflows no llaman al script de configuración OIDC y el código de aplicación no cambió.
+
+El smoke usa el administrador inicial autorizado y no sustituye la aceptación de documentos, colas, Sery, notificaciones o recuperación. Esos flujos requieren cuentas/roles y datos de prueba preparados deliberadamente en cloud; no importar automáticamente la base local ni usar la cuenta admin para probar funciones de docente/coordinador.
 
 ### Handoff de los PR de implementación (integrados antes de la release)
 
@@ -90,7 +121,7 @@ Basic B2 no tiene deployment slots: puede haber interrupción breve, no se prome
 
 ## OIDC y variables de GitHub
 
-Después de existir los recursos, `Configure-GitHubOidc.ps1 -BackendApp <nombre> -WorkerApp <nombre> -PostgresServer <nombre> -KeyVault <nombre> -ApproveIdentityChanges` crea/reutiliza una identidad sin client secret, federada a `repo:HS-Education/hs-backend:environment:azure-students`. Requiere permisos Entra/RBAC; no se ha ejecutado. Reader en Students para validar oferta, Website Contributor solo en las dos apps, rol limitado a firewall PostgreSQL y Secrets User solo en las dos credenciales de migración. No dar Owner/Contributor de toda la suscripción al CD.
+Después de existir los recursos, `Configure-GitHubOidc.ps1 -BackendApp <nombre> -WorkerApp <nombre> -PostgresServer <nombre> -KeyVault <nombre> -ApproveIdentityChanges` crea/reutiliza la identidad administrada de usuario `hs-thesis-github-cd` mediante `github-oidc.bicep`, sin client secret, federada exclusivamente a `repo:HS-Education/hs-backend:environment:azure-students`. Se administra por ARM/RBAC en la suscripción Students; no necesita listar ni crear aplicaciones del directorio mediante Microsoft Graph. No requiere VM ni runner propio: `azure/login` conserva el intercambio OIDC con `client-id`, `tenant-id` y `subscription-id`. Antes de actualizar, rechaza credenciales federadas preexistentes ajenas o incompatibles. Reader en Students para validar oferta, Website Contributor solo en las dos apps, rol limitado a firewall PostgreSQL y Secrets User solo en las dos credenciales de migración. No dar Owner/Contributor de toda la suscripción al CD. [Referencia Microsoft](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust-user-assigned-managed-identity).
 
 Backend environment secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Variables: `AZURE_RESOURCE_GROUP`, `AZURE_BACKEND_APP`, `AZURE_WORKER_APP`, `AZURE_POSTGRES_SERVER`, `AZURE_KEY_VAULT`, `AZURE_BACKEND_URL`, `AZURE_WORKER_URL`. Front: `AZURE_FRONTEND_URL`, `AZURE_API_BASE_URL` (URL cloud absoluta terminada en `/api/v1` para smoke), y secrets `SMOKE_USERNAME`/`SMOKE_PASSWORD` de cuenta de prueba autorizada. Los nombres/URLs salen de los outputs públicos de Bicep. App Service usa `/api/v1` relativo en el bundle.
 
