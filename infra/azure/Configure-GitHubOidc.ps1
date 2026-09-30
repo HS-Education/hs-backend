@@ -27,10 +27,11 @@ function Assert-CdFederations {
     param([AllowEmptyCollection()][object[]] $Federations)
     if ($Federations.Count -gt 1) { throw 'Unexpected extra OIDC federations; existing trust was not modified.' }
     foreach ($federation in $Federations) {
-        if ($federation.name -ne 'hs-backend-azure-students' -or
-            $federation.issuer -ne 'https://token.actions.githubusercontent.com' -or
-            $federation.subject -ne 'repo:HS-Education/hs-backend:environment:azure-students' -or
-            @($federation.audiences).Count -ne 1 -or $federation.audiences[0] -ne 'api://AzureADTokenExchange') {
+        # Azure compares these claims exactly, including case and immutable IDs.
+        if ($federation.name -cne 'hs-backend-azure-students' -or
+            $federation.issuer -cne 'https://token.actions.githubusercontent.com' -or
+            $federation.subject -cne 'repo:HS-Education@334800057/hs-backend@1170255521:environment:azure-students' -or
+            @($federation.audiences).Count -ne 1 -or $federation.audiences[0] -cne 'api://AzureADTokenExchange') {
             throw 'Existing OIDC federation does not match the protected environment; it was not modified.'
         }
     }

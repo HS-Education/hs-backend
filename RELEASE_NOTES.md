@@ -1,3 +1,26 @@
+# Release 0.2.3
+
+## Azure authentication and migration fixes
+
+- Match GitHub's immutable owner/repository IDs in the protected backend OIDC subject and validate claims case-sensitively.
+- Detect the installed PostgreSQL firewall CLI contract before creating a temporary runner rule; support both current and legacy argument layouts.
+- Delete only the invocation's exact firewall resource ID and verify rule absence before allowing deployment to continue.
+- Preserve migration and cleanup failure context, clear migration credentials from the process and reject broad Azure access through a zero IP address.
+- Add 18 offline migration lifecycle regressions covering both CLI layouts, partial failures, exceptions and cleanup verification.
+- Keep the Students fence, scoped RBAC, environment approvals, matching tagged artifacts and post-deployment smoke gates unchanged.
+
+## Release preparation and integration
+
+- Set the backend Maven project version to 0.2.3 and pair it with frontend 0.2.3.
+- Create `release/0.2.3` from integrated `develop` after CI and CodeQL succeeded for the migration-fix merge commit.
+- Repeat all 36 deployment-script tests locally; these use simulated cloud operations and do not prove an Azure migration or functional acceptance.
+- Open the release PR into `main`; wait for checks and approval on its current SHA before merging, then synchronize `main` back into `develop`.
+- Publish new matching `v0.2.3` tags on the final main commits, frontend first, only after integration. Preserve `v0.2.2` and existing release assets.
+- The new tag includes the corrected migration script; rerunning `v0.2.2` cannot pick up this code change.
+- Publishing this release branch does not deploy. The collaborator triggers tag publication and the designated reviewer approves protected jobs before migrations/deployment and subsequent smoke validation.
+
+---
+
 # Release 0.2.2
 
 ## Protected tag-driven Azure deployment
