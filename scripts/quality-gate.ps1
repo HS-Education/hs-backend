@@ -191,7 +191,8 @@ try {
         } finally { Pop-Location }
     }
 
-    $jar = Join-Path $backendRoot 'target\hs-tesis-0.0.1-SNAPSHOT.jar'
+    $backendPom = [xml](Get-Content -LiteralPath (Join-Path $backendRoot 'pom.xml') -Raw)
+    $jar = Join-Path $backendRoot ('target\{0}-{1}.jar' -f $backendPom.project.artifactId, $backendPom.project.version)
     if (-not (Test-Path -LiteralPath $jar)) { throw "Missing backend jar: $jar" }
     if ($DockerBackend) {
         $containerEnvFile = Join-Path $tempDir 'backend-container.env'
