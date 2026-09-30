@@ -139,11 +139,29 @@ Basic B2 no tiene deployment slots: puede haber interrupción breve, no se prome
 
 ## OIDC y variables de GitHub
 
-Después de existir los recursos, `Configure-GitHubOidc.ps1 -BackendApp <nombre> -WorkerApp <nombre> -PostgresServer <nombre> -KeyVault <nombre> -ApproveIdentityChanges` crea/reutiliza la identidad administrada de usuario `hs-thesis-github-cd` mediante `github-oidc.bicep`, sin client secret, federada exclusivamente a `repo:HS-Education/hs-backend:environment:azure-students`. Se administra por ARM/RBAC en la suscripción Students; no necesita listar ni crear aplicaciones del directorio mediante Microsoft Graph. No requiere VM ni runner propio: `azure/login` conserva el intercambio OIDC con `client-id`, `tenant-id` y `subscription-id`. Antes de actualizar, rechaza credenciales federadas preexistentes ajenas o incompatibles. Reader en Students para validar oferta, Website Contributor solo en las dos apps, rol limitado a firewall PostgreSQL y Secrets User solo en las dos credenciales de migración. No dar Owner/Contributor de toda la suscripción al CD. [Referencia Microsoft](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust-user-assigned-managed-identity).
+Después de existir los recursos, `Configure-GitHubOidc.ps1 -BackendApp <nombre> -WorkerApp <nombre> -PostgresServer <nombre> -KeyVault <nombre> -ApproveIdentityChanges` crea/reutiliza la identidad administrada de usuario `hs-thesis-github-cd` mediante `github-oidc.bicep`, sin client secret, federada exclusivamente a `repo:HS-Education@334800057/hs-backend@1170255521:environment:azure-students`. Los IDs corresponden al propietario y repositorio actuales; deben coincidir exactamente, incluidas mayúsculas, con el `subject` del token GitHub. Este repositorio usa el formato de [claims inmutables de GitHub](https://docs.github.com/en/actions/reference/security/oidc#immutable-subject-claims), no el formato anterior basado solo en nombres. Se administra por ARM/RBAC en la suscripción Students; no necesita listar ni crear aplicaciones del directorio mediante Microsoft Graph. No requiere VM ni runner propio: `azure/login` conserva el intercambio OIDC con `client-id`, `tenant-id` y `subscription-id`. Antes de actualizar, rechaza credenciales federadas preexistentes ajenas o incompatibles. Reader en Students para validar oferta, Website Contributor solo en las dos apps, rol limitado a firewall PostgreSQL y Secrets User solo en las dos credenciales de migración. No dar Owner/Contributor de toda la suscripción al CD. [Referencia Microsoft](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust-user-assigned-managed-identity).
+
+### Recuperación de AADSTS700213 por el subject anterior
+
+Si la identidad ya existe y la única discrepancia verificada es el formato anterior del subject, el script general rechaza esa confianza: no crea una segunda federación ni amplía permisos para repararla. Revisar primero la suscripción Students habilitada con spending limit On, la identidad/tenant, la única federación `hs-backend-azure-students`, su issuer/audience y el subject real en el job fallido. Verificar también los IDs contra los metadatos actuales del repositorio. Con autorización operativa explícita, actualizar **solo** ese subject mediante [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/identity/federated-credential#az-identity-federated-credential-update):
+
+```powershell
+az identity federated-credential update `
+  --subscription 86d9e5e6-b9bf-44b4-915a-106207e0bc02 `
+  --resource-group rg-hs-thesis-azure `
+  --identity-name hs-thesis-github-cd `
+  --name hs-backend-azure-students `
+  --issuer 'https://token.actions.githubusercontent.com' `
+  --subject 'repo:HS-Education@334800057/hs-backend@1170255521:environment:azure-students' `
+  --audiences 'api://AzureADTokenExchange' `
+  --only-show-errors --output none
+```
+
+Leer nuevamente la federación y comprobar subject, issuer, audience, client ID y asignaciones RBAC sin cambios adicionales. No ejecutar de nuevo el setup completo, cambiar secretos, desactivar las claims inmutables ni relajar las aprobaciones/tags del environment. La lectura confirma configuración, **no** demuestra un intercambio OIDC exitoso. El compañero que inicia el CD puede usar **Re-run failed jobs** en el run existente; el revisor autoriza cuando GitHub lo solicite. Para este fallo previo a migraciones/despliegue se conserva `v0.2.2`: no mover el tag ni volver a publicar el artefacto frontend ya exitoso. Integrar también esta corrección de IaC mediante PR a `develop` para evitar que futuros setups restauren el subject anterior.
 
 Backend environment secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`. Variables: `AZURE_RESOURCE_GROUP`, `AZURE_BACKEND_APP`, `AZURE_WORKER_APP`, `AZURE_POSTGRES_SERVER`, `AZURE_KEY_VAULT`, `AZURE_BACKEND_URL`, `AZURE_WORKER_URL`. Front: `AZURE_FRONTEND_URL`, `AZURE_API_BASE_URL` (URL cloud absoluta terminada en `/api/v1` para smoke), y secrets `SMOKE_USERNAME`/`SMOKE_PASSWORD` de cuenta de prueba autorizada. Los nombres/URLs salen de los outputs públicos de Bicep. App Service usa `/api/v1` relativo en el bundle.
 
-Si front es privado, `FRONTEND_RELEASE_READ_TOKEN` de lectura mínima de contents para ese repo debe permitir download y clone; no incluir token en URLs/logs. SWA adicional requiere token de deployment propio y federación `repo:HS-Education/hs-front:environment:azure-students` con lectura del target Students; es configuración futura, no validada ahora.
+Si front es privado, `FRONTEND_RELEASE_READ_TOKEN` de lectura mínima de contents para ese repo debe permitir download y clone; no incluir token en URLs/logs. SWA adicional requiere token de deployment propio y federación con el subject real del repositorio frontend para `azure-students`, incluidos los IDs inmutables cuando corresponda, con lectura del target Students; es configuración futura, no validada ahora.
 
 ## Reintentos y límites
 
