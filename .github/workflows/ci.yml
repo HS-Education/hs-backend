@@ -98,10 +98,31 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: ai-service/requirements.txt
+          cache-dependency-path: ai-service/requirements-azure.txt
 
       - name: Install AI service test dependencies
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
+        run: python -m pip install --disable-pip-version-check -r requirements-azure.txt
 
       - name: Run offline AI contract and validation tests
         run: python -m unittest discover -s tests -p 'test_*.py' -v
+
+  deployment-contract:
+    name: Backend / Azure deployment contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify Students fence without Azure authentication
+        shell: pwsh
+        run: ./infra/azure/Test-StudentsGuard.ps1
+      - name: Reject credential signatures and tracked environment files
+        shell: pwsh
+        run: ./infra/azure/Verify-TrackedSecrets.ps1 -RepositoryPath .
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Verify safe deployment packages
+        run: python -m unittest discover -s scripts/tests -p 'test_*.py' -v
+      - name: Compile infrastructure without provisioning
+        run: |
+          az bicep install
+          az bicep build --file infra/azure/main.bicep --stdout --only-show-errors > /dev/null

@@ -1,0 +1,142 @@
+name: Backend Azure CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing backend and frontend release tag integrated into main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hs-azure-students-deployment
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: vars.AZURE_CD_ENABLED == 'true' && github.ref_type == 'tag' && github.ref_name == inputs.release_tag
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      GH_TOKEN: ${{ secrets.FRONTEND_RELEASE_READ_TOKEN || github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+      - name: Verify main release ancestry
+        shell: pwsh
+        run: |
+          . ./infra/azure/Students.Common.ps1
+          Assert-ReleaseTag -Tag $env:RELEASE_TAG
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Verify Java and disposable PostgreSQL integration
+        run: bash ./mvnw --batch-mode --no-transfer-progress -Plocal-gate verify
+      - name: Verify Python and deployment packages
+        run: |
+          python -m pip install -r ai-service/requirements-azure.txt
+          (cd ai-service && python -m unittest discover -s tests -p 'test_*.py')
+          python -m unittest discover -s scripts/tests -p 'test_*.py'
+          python scripts/package-azure-worker.py
+      - name: Download the matching trusted frontend release
+        shell: bash
+        run: |
+          mkdir -p target/frontend-release
+          gh release download "$RELEASE_TAG" --repo HS-Education/hs-front --pattern frontend.zip --pattern frontend-manifest.json --dir target/frontend-release
+          FRONT_SHA=$(python -c 'import json; print(json.load(open("target/frontend-release/frontend-manifest.json"))["commit"])')
+          [[ "$FRONT_SHA" =~ ^[a-f0-9]{40}$ ]]
+          gh auth setup-git --hostname github.com
+          git clone --filter=blob:none --no-checkout https://github.com/HS-Education/hs-front.git target/frontend-source
+          git -C target/frontend-source merge-base --is-ancestor "$FRONT_SHA" origin/main
+          FRONT_TAG_SHA=$(git -C target/frontend-source rev-parse "$RELEASE_TAG^{commit}")
+          [[ "$FRONT_TAG_SHA" == "$FRONT_SHA" ]]
+          python scripts/import-frontend-release.py
+      - name: Package same-origin Java and Angular release
+        run: |
+          bash ./mvnw --batch-mode --no-transfer-progress -DskipTests package
+          cp target/hs-tesis-*.jar target/app.jar
+          java -Dloader.main=com.hs.hstesis.shared.infrastructure.azure.DatabaseMigrationMain -cp target/app.jar org.springframework.boot.loader.launch.PropertiesLauncher --verify-package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: azure-release
+          path: |
+            target/app.jar
+            target/azure-worker.zip
+            target/frontend-release/frontend-manifest.json
+          retention-days: 14
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: azure-students
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CORE_OUTPUT: none
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_tag }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: azure-release
+          path: deployment
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Authenticate using environment-scoped OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Refuse non-Students or mismatched resources
+        shell: pwsh
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          BACKEND_APP: ${{ vars.AZURE_BACKEND_APP }}
+          WORKER_APP: ${{ vars.AZURE_WORKER_APP }}
+        run: |
+          . ./infra/azure/Students.Common.ps1
+          $null = Get-StudentsAccount -SubscriptionId $env:AZURE_SUBSCRIPTION_ID
+          if ($env:RESOURCE_GROUP -ne 'rg-hs-thesis-azure' -or $env:BACKEND_APP -notmatch '^hs-thesis-api-[a-z0-9]+$' -or $env:WORKER_APP -notmatch '^hs-thesis-worker-[a-z0-9]+$') { throw 'Unexpected target resources.' }
+          foreach ($name in @($env:BACKEND_APP, $env:WORKER_APP)) {
+            az webapp show --resource-group $env:RESOURCE_GROUP --name $name --subscription $env:AZURE_SUBSCRIPTION_ID --output none
+            if ($LASTEXITCODE -ne 0) { throw 'Deployment target is not in the verified Students resource group.' }
+          }
+      - name: Apply migrations with separate owner credentials
+        shell: pwsh
+        env:
+          RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          POSTGRES_SERVER: ${{ vars.AZURE_POSTGRES_SERVER }}
+          KEY_VAULT: ${{ vars.AZURE_KEY_VAULT }}
+        run: ./infra/azure/Migrate-Database.ps1 -ResourceGroup $env:RESOURCE_GROUP -PostgresServer $env:POSTGRES_SERVER -KeyVault $env:KEY_VAULT -Jar deployment/app.jar
+      - name: Deploy Python worker first
+        uses: Azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WORKER_APP }}
+          package: deployment/azure-worker.zip
+      - name: Deploy same-origin Java and Angular application
+        uses: Azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_BACKEND_APP }}
+          package: deployment/app.jar
+      - name: Verify deployed health and runtime configuration
+        shell: pwsh
+        env:
+          BACKEND_URL: ${{ vars.AZURE_BACKEND_URL }}
+          WORKER_URL: ${{ vars.AZURE_WORKER_URL }}
+        run: ./infra/azure/Test-CloudHealth.ps1 -BackendUrl $env:BACKEND_URL -WorkerUrl $env:WORKER_URL
