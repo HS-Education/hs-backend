@@ -117,3 +117,8 @@ class CapacityExceeded(Exception):
 def sse_token_frame(token):
     """One JSON payload per SSE event; model text cannot forge event delimiters."""
     return "data: " + json.dumps({"token": token}, ensure_ascii=False) + "\n\n"
+
+
+def sse_error_frame(code):
+    """Emit a fixed, non-sensitive terminal error code for an incomplete stream."""
+    return "data: " + json.dumps({"error": code}, ensure_ascii=True) + "\n\n"
