@@ -47,6 +47,12 @@ class OidcCliContractTest(unittest.TestCase):
         self.assertEqual(self.source.count("role = 'Key Vault Secrets User'"), 2)
         self.assertIn('--assignee-object-id $principalId --assignee-principal-type ServicePrincipal', self.source)
 
+    def test_fix_branches_run_ci_and_security_before_pull_requests(self):
+        for workflow in ('ci.yml', 'security-analysis.yml'):
+            source = (ROOT / '.github/workflows' / workflow).read_text(encoding='utf-8')
+            push_filter = source.split('  push:', 1)[1].split('  pull_request:', 1)[0]
+            self.assertIn("'fix/**'", push_filter, workflow)
+
     @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell is required for behavioral guard checks')
     def test_existing_federation_guard_behavior_offline(self):
         source_path = str(SCRIPT).replace("'", "''")
