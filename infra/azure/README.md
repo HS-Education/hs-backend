@@ -62,7 +62,25 @@ Copiar `parameters.example.json` a `parameters.local.json` (ignorado), completar
 
 What-if necesita sesión/RBAC/providers adecuados, pero no crea recursos por diseño. La plantilla es para un esquema cloud nuevo: migrar datos locales es una decisión separada. No tocar la BD de desarrollo ni restaurarla automáticamente. Si se necesita trasladar datos: respaldar PostgreSQL y MinIO, probar restore en una BD destino desechable, comprobar esquema/pgvector antes de establecer una baseline explícita, copiar objetos conservando keys, verificar checksums y recién después cambiar endpoints. Nunca activar baseline-on-migrate automáticamente sobre una BD poblada.
 
-## GitFlow y CD
+## CD automático por tags: siguiente release
+
+La implementación nueva añade `push.tags: ['v*']` a **Frontend Azure release** y **Backend Azure CD**, conservando `workflow_dispatch` para recuperación manual. Se debe integrar primero esta feature a develop y preparar una nueva release coordinada en ambos repositorios. Los tags `v0.2.1` ya publicados no se modifican ni disparan retroactivamente este código.
+
+1. Tras los PR/CI/review/release/main y sincronización hacia develop, el compañero publica el mismo tag nuevo en ambos repos, preferiblemente frontend primero. Publicar una rama o crear el tag solo localmente no inicia CD.
+2. El frontend usa `app-service` automáticamente y prepara los assets; mantiene el environment protegido. El usuario revisa y aprueba esa ejecución.
+3. El backend verifica su tag/main y sus tests. Espera hasta 30 minutos por **ambos** assets del frontend, incluso si los tags llegan en orden inverso. Si faltan o expira el plazo, falla sin desplegar: revisar tag, aprobación y build del front antes de reintentar.
+4. Verifica el SHA/tag/main, checksum, same-origin y presencia del guard de smoke en el frontend antes de empaquetar. El job `deploy` depende de `verify` y sigue requiriendo aprobación de `azure-students` antes de obtener OIDC o ejecutar Flyway/Web App deploy.
+5. Después de `deploy` exitoso, el job `browser-smoke` del **mismo workflow backend** obtiene el frontend etiquetado, comprueba su SHA contra el manifiesto empaquetado y ejecuta los tres escenarios existentes. Usa `contents: read`, sin OIDC, y conserva el environment protegido; si GitHub solicita otra revisión del environment, aprobarla explícitamente. Si el deploy falla, el smoke se omite; si el smoke falla, CD queda fallido y no se declara aceptación cloud ni se hace rollback automático.
+
+Mantener `AZURE_CD_ENABLED=true` en ambos repos, revisión de `sebaditas`, `prevent_self_review=true`, sin bypass y solo tags `v*`. El **compañero** debe publicar los nuevos tags: si `sebaditas` publica el tag y es el único revisor, la autoaprobación sigue bloqueada. No quitar esa protección para desbloquear la ejecución. El mismo tag debe contener ambos cambios y no debe moverse después.
+
+Para el smoke automático, el environment **del backend** necesita `SMOKE_USERNAME` y `SMOKE_PASSWORD` de una cuenta autorizada, además de su `AZURE_BACKEND_URL` existente. El CD comprueba que existen antes de las migraciones; no basta con tenerlos solo en el environment del frontend. Configurarlos cifrados mediante GitHub Secrets después de autorizar explícitamente ese destino, nunca como variables públicas, archivos versionados o valores de log. No se amplían roles Azure ni se añade PAT de escritura entre repos. Los repos públicos permiten leer el paquete frontend con el token estándar del backend.
+
+El workflow independiente **Azure browser smoke** del frontend permanece manual para diagnóstico; no se dispara con tags porque podría correr antes del backend. SWA sigue siendo opcional y solo se permite por selección manual explícita, nunca por publicación de tag. Los workflows manuales seleccionan el tag como ref; `release_tag` debe coincidir para release/CD. Reintentar no permite sobrescribir assets (`--clobber`) ni tags.
+
+Las esperas son acotadas y pueden consumir minutos de runner mientras se espera el frontend. Aprobar su ejecución pronto; si vence el plazo, reintentar el backend sobre el mismo tag cuando el paquete ya esté listo. La configuración no crea recursos ni inicia despliegues. La aceptación de documentos, Sery, notificaciones y recuperación sigue pendiente de pruebas funcionales cloud.
+
+## GitFlow y CD inicial (histórico/manual)
 
 1. Ambas ramas `feature/azure-students-deployment` → PR a `develop`, CI de tests/seguridad y revisión humana.
 2. Validar conjuntamente; abrir nueva `release/<versión>` desde develop, PR a main en ambos repos. No reusar ni mover `v0.1.1`: ese tag no incluye esta implementación.

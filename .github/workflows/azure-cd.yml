@@ -1,6 +1,8 @@
 name: Backend Azure CD
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       release_tag:
@@ -11,21 +13,24 @@ on:
 permissions:
   contents: read
 
+env:
+  RELEASE_TAG: ${{ github.ref_name }}
+
 concurrency:
   group: hs-azure-students-deployment
   cancel-in-progress: false
 
 jobs:
   verify:
-    if: vars.AZURE_CD_ENABLED == 'true' && github.ref_type == 'tag' && github.ref_name == inputs.release_tag
+    if: vars.AZURE_CD_ENABLED == 'true' && github.ref_type == 'tag' && (github.event_name == 'push' || github.ref_name == inputs.release_tag)
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     env:
-      RELEASE_TAG: ${{ inputs.release_tag }}
       GH_TOKEN: ${{ secrets.FRONTEND_RELEASE_READ_TOKEN || github.token }}
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
       - name: Verify main release ancestry
         shell: pwsh
@@ -48,6 +53,8 @@ jobs:
           (cd ai-service && python -m unittest discover -s tests -p 'test_*.py')
           python -m unittest discover -s scripts/tests -p 'test_*.py'
           python scripts/package-azure-worker.py
+      - name: Wait for the matching frontend package before downloading
+        run: python scripts/wait-frontend-release.py
       - name: Download the matching trusted frontend release
         shell: bash
         run: |
@@ -60,6 +67,7 @@ jobs:
           git -C target/frontend-source merge-base --is-ancestor "$FRONT_SHA" origin/main
           FRONT_TAG_SHA=$(git -C target/frontend-source rev-parse "$RELEASE_TAG^{commit}")
           [[ "$FRONT_TAG_SHA" == "$FRONT_SHA" ]]
+          git -C target/frontend-source cat-file -e "$FRONT_SHA:scripts/assert-cloud-smoke-target.cjs"
           python scripts/import-frontend-release.py
       - name: Package same-origin Java and Angular release
         run: |
@@ -78,6 +86,7 @@ jobs:
   deploy:
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment: azure-students
     permissions:
       contents: read
@@ -86,9 +95,16 @@ jobs:
       AZURE_CORE_OUTPUT: none
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     steps:
+      - name: Require smoke credentials before changing the cloud application
+        shell: bash
+        env:
+          SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
+          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+        run: |
+          [[ -n "$SMOKE_USERNAME" && -n "$SMOKE_PASSWORD" ]]
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_tag }}
+          ref: ${{ github.ref_name }}
       - uses: actions/download-artifact@v8
         with:
           name: azure-release
@@ -140,3 +156,58 @@ jobs:
           BACKEND_URL: ${{ vars.AZURE_BACKEND_URL }}
           WORKER_URL: ${{ vars.AZURE_WORKER_URL }}
         run: ./infra/azure/Test-CloudHealth.ps1 -BackendUrl $env:BACKEND_URL -WorkerUrl $env:WORKER_URL
+
+  browser-smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: azure-students
+    permissions:
+      contents: read
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.AZURE_BACKEND_URL }}
+      PLAYWRIGHT_API_BASE_URL: ${{ format('{0}/api/v1', vars.AZURE_BACKEND_URL) }}
+      SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: azure-release
+          path: deployment
+      - uses: actions/checkout@v7
+        with:
+          repository: HS-Education/hs-front
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          path: frontend
+          persist-credentials: false
+      - name: Verify the smoke source matches the deployed frontend
+        working-directory: frontend
+        shell: bash
+        run: |
+          EXPECTED_SHA=$(python3 -c 'import json; print(json.load(open("../deployment/frontend-release/frontend-manifest.json"))["commit"])')
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_SHA" ]]
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: pnpm/setup@v3
+        with:
+          version: 11.0.8
+          runtime: node@22
+          install: false
+      - name: Validate the cloud destination before using smoke credentials
+        working-directory: frontend
+        run: node scripts/assert-cloud-smoke-target.cjs
+      - name: Install the tagged browser test dependencies
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+      - name: Verify deployed login, cookies, reload and logout
+        working-directory: frontend
+        run: pnpm exec playwright test e2e/login.smoke.spec.ts
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: cloud-smoke-report-${{ github.ref_name }}
+          path: frontend/test-results/playwright-junit.xml
+          retention-days: 7
