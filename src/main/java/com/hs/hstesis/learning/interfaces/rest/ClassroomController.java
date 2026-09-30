@@ -79,10 +79,6 @@ public class ClassroomController {
                 ? classroomQueryService.handle(new GetAllClassroomsQuery())
                 : classroomQueryService.handle(new GetClassroomsByUserIdQuery(userId));
 
-        if (classrooms.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
         var resources = classrooms.stream()
                 .map(classroom -> ClassroomResourceFromEntityAssembler.toResourceFromEntity(
                         classroom, getTeacherName(classroom.getId())))
