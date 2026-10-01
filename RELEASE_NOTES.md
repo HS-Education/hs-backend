@@ -1,3 +1,24 @@
+# Release 0.2.4
+
+## Azure Web App authentication recovery
+
+- Override `AZURE_CORE_OUTPUT` to `json` only for the Python and Java/Angular `Azure/webapps-deploy@v3` steps so their Azure CLI authentication reads can parse JSON.
+- Retain the deployment job's silent CLI default for scripts, existing OIDC login, scoped permissions, protected approvals and separate migration credentials.
+- Add three offline regression tests for per-step overrides and the action's JSON parsing contract; no authentication tokens are requested by those tests.
+- Keep successful database migrations intact. Do not roll them back to retry this deployment correction.
+
+## Release preparation and integration
+
+- Set the backend Maven project version to 0.2.4 and pair it with frontend 0.2.4.
+- Prepare `release/0.2.4` from integrated `develop`; require current CI, CodeQL and independent approval before merging its PR into `main`.
+- Run all 39 deployment-script tests locally; simulated operations do not prove cloud deployment or functional acceptance.
+- Synchronize `main` back into `develop` through a separate reviewed PR after release integration.
+- Publish new matching `v0.2.4` tags on final main commits, frontend first; preserve existing tags and release assets. Rerunning an older tag cannot include this source correction.
+- Keep environment self-review restrictions. An authorized collaborator must initiate protected runs so the designated reviewer can approve migrations/deployment and smoke validation.
+- Branch publication does not deploy. After protected deployment succeeds, run automatic browser smoke and separately validate documents, Sery, notifications and recovery.
+
+---
+
 # Release 0.2.3
 
 ## Azure authentication and migration fixes
