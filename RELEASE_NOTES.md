@@ -1,3 +1,25 @@
+# Release 0.2.5
+
+## Azure startup readiness recovery
+
+- Require real JSON health states from Java and Python, Angular login HTML, and the exact same-origin runtime configuration instead of accepting HTTP 200 alone.
+- Retry transient startup pages and HTTP failures with bounded attempts, a shared monotonic time budget and per-request timeouts; reject redirects and invalid payloads without logging response bodies.
+- Keep configuration validation strict for object/string types, key casing and extra fields.
+- Add 10 offline readiness regressions; use a virtual clock only in tests so runner/module startup cannot consume their fictitious deadline. Repeat both deadline cases three times.
+- Preserve application URLs, secrets, scoped OIDC permissions, environment approvals and successful database migrations.
+
+## Release preparation and integration
+
+- Set the Maven project version to 0.2.5 and pair it with frontend 0.2.5.
+- Create `release/0.2.5` from integrated `develop` after CI and CodeQL passed for the readiness fix and its merge commit.
+- Run all 49 deployment-script tests locally. These do not prove browser smoke or full functional acceptance in Azure.
+- Require current release CI, CodeQL and independent approval before merging the PR into `main`, then synchronize `main` back into `develop` through reviewed PRs.
+- Publish new matching `v0.2.5` tags on the final main commits, frontend first; keep `v0.2.4` and existing release assets unchanged.
+- The authorized collaborator publishes the tags/initiates protected runs; the designated reviewer approves them without self-review or bypass.
+- Branch publication does not deploy. After protected CD succeeds, complete browser smoke and separately validate login, documents, Sery, notifications and recovery.
+
+---
+
 # Release 0.2.4
 
 ## Azure Web App authentication recovery
