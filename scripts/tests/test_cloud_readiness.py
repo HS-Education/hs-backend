@@ -11,6 +11,7 @@ HARNESS = r'''
 $ErrorActionPreference='Stop'
 $global:scenario='SCENARIO'
 $global:attempt=0; $global:requests=0
+$global:testClock=[pscustomobject]@{Elapsed=[pscustomobject]@{TotalSeconds=0.0}}
 function Start-Sleep { throw 'Offline regression must not retry with real sleeps.' }
 function Invoke-WebRequest {
     param([string]$Uri,[int]$TimeoutSec,[int]$MaximumRedirection)
@@ -43,15 +44,23 @@ function Invoke-WebRequest {
         'array-json' { if ($Uri.EndsWith('/runtime-config.json')) { $body='[{"apiBaseUrl":"/api/v1"}]' } }
         'redirect' { if ($Uri.EndsWith('/runtime-config.json')) { $status=302 } }
         'actuator-media' { if ($Uri.EndsWith('/actuator/health')) { $type='application/vnd.spring-boot.actuator.v3+json' } }
-        'deadline' { Microsoft.PowerShell.Utility\Start-Sleep -Milliseconds 1100 }
-        'late-config' { if ($Uri.EndsWith('/runtime-config.json')) { Microsoft.PowerShell.Utility\Start-Sleep -Milliseconds 1100 } }
+        'deadline' { $global:testClock.Elapsed.TotalSeconds=2.0 }
+        'late-config' { if ($Uri.EndsWith('/runtime-config.json')) { $global:testClock.Elapsed.TotalSeconds=2.0 } }
     }
     if ($global:scenario -eq 'bytes') { $body=[Text.Encoding]::UTF8.GetBytes($body) }
     return [pscustomobject]@{StatusCode=$status; Headers=@{'Content-Type'=$type}; Content=$body}
 }
 $caught=$null
+# Replace only the clock construction, not readiness control flow or validators.
+# Host load and PowerShell module autoload must not consume the virtual test budget.
+$scriptSource=Get-Content -LiteralPath 'SCRIPT_PATH' -Raw -Encoding UTF8
+$clockStatement='$clock = [Diagnostics.Stopwatch]::StartNew()'
+if ([regex]::Matches($scriptSource,[regex]::Escape($clockStatement)).Count -ne 1) {
+    throw 'The production monotonic clock contract changed; update the test explicitly.'
+}
+$subject=[scriptblock]::Create($scriptSource.Replace($clockStatement,'$clock = $global:testClock'))
 try {
-    & 'SCRIPT_PATH' -BackendUrl 'BACKEND_URL' -WorkerUrl 'https://hs-worker-offline.azurewebsites.net/' -MaxAttempts 2 -MaxWaitSeconds WAIT_SECONDS -RetryDelaySeconds 0
+    & $subject -BackendUrl 'BACKEND_URL' -WorkerUrl 'https://hs-worker-offline.azurewebsites.net/' -MaxAttempts 2 -MaxWaitSeconds WAIT_SECONDS -RetryDelaySeconds 0
 } catch { $caught=$_.Exception.Message }
 if ('EXPECTED_ERROR' -eq '') {
     if ($caught) { throw "Unexpected script failure: $caught" }
@@ -97,10 +106,14 @@ class CloudReadinessTest(unittest.TestCase):
         self.run_case('actuator-media', 1, 4)
 
     def test_deadline_stops_further_http_requests(self):
-        self.run_case('deadline', 1, 1, 'Cloud readiness did not pass', wait=1)
+        for repetition in range(3):
+            with self.subTest(repetition=repetition):
+                self.run_case('deadline', 1, 1, 'Cloud readiness did not pass', wait=1)
 
     def test_response_after_deadline_cannot_pass(self):
-        self.run_case('late-config', 1, 4, 'Cloud readiness did not pass', wait=1)
+        for repetition in range(3):
+            with self.subTest(repetition=repetition):
+                self.run_case('late-config', 1, 4, 'Cloud readiness did not pass', wait=1)
 
     def test_persistent_invalid_responses_fail_closed_with_bounded_attempts(self):
         for scenario, requests in [('always-html', 2), ('wrong-config', 8), ('extra-config', 8),
