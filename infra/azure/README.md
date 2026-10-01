@@ -165,6 +165,14 @@ Si front es privado, `FRONTEND_RELEASE_READ_TOKEN` de lectura mínima de content
 
 ## Migraciones y compatibilidad de Azure CLI
 
+### Salida CLI y autenticación de las acciones de despliegue
+
+El run de `v0.2.3` superó OIDC y migraciones, pero `Azure/webapps-deploy@v3` falló al inicializar su autenticación: su authorizer interpreta como JSON la salida de `az account show` y `az cloud show` sin especificar `--output`. El valor global `AZURE_CORE_OUTPUT: none` suprime esa salida y provoca el mensaje genérico "No credentials found" aunque exista sesión. El [bundle de la acción](https://github.com/Azure/webapps-deploy/blob/v3/dist/index.js) contiene ese contrato; las advertencias de Node no son la causa de este fallo.
+
+Conservar `none` como valor del job para los scripts y establecer `AZURE_CORE_OUTPUT: json` **solo** en el `env` de las dos acciones de despliegue Python/Java. La acción captura esas respuestas internamente; no imprimir tokens, cuentas completas ni credenciales de publicación como diagnóstico. Mantener OIDC, los permisos acotados y los pasos de enmascaramiento existentes. Las pruebas de `test_tag_driven_cd.py` comprueban los dos overrides y el contrato de lectura JSON con fixtures offline; no prueban un despliegue real.
+
+Este cambio requiere una nueva release/tag integrado en main; otro rerun de `v0.2.3` conserva el workflow anterior. No mover tags existentes ni deshacer las migraciones que ya terminaron correctamente. Crear PRs y esperar checks/revisión independiente antes de fusionar. La sesión actual y el actor de las ejecuciones siguen sujetos a las restricciones de autoaprobación; no cambiar reglas, usar bypass ni suplantar otra cuenta para continuar.
+
 `Migrate-Database.ps1` consulta la ayuda local de `firewall-rule create` antes de abrir acceso o leer credenciales. Admite el contrato actual (`--server-name` para el servidor, `--name` para la regla) y el anterior (`--name` para el servidor, `--rule-name` para la regla); una sintaxis desconocida bloquea el proceso sin mutaciones. Ver [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/postgres/flexible-server/firewall-rule). No usar un cambio de versión a ciegas como sustituto de comprobar el contrato.
 
 La regla permite una sola IPv4 del runner: inicio y fin iguales; se rechazan IPv6 y `0.0.0.0`. La limpieza usa `delete --ids` con el ID completo de la regla `cd-<GUID>` de esa ejecución, sin tocar reglas de las apps ni ampliar RBAC. Incluso ante un fallo de creación o migración, se intenta limpiar y se consulta el inventario filtrado por ese nombre. Solo un resultado JSON de array vacío con consulta exitosa demuestra ausencia. Si no se puede confirmarla, CD falla y muestra el ID exacto para revisión; si también hubo fallo de migración, conserva ambos errores. Las variables de credenciales de migración se borran del proceso en `finally`.

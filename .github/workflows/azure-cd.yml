@@ -142,11 +142,16 @@ jobs:
         run: ./infra/azure/Migrate-Database.ps1 -ResourceGroup $env:RESOURCE_GROUP -PostgresServer $env:POSTGRES_SERVER -KeyVault $env:KEY_VAULT -Jar deployment/app.jar
       - name: Deploy Python worker first
         uses: Azure/webapps-deploy@v3
+        env:
+          # The action parses CLI account/cloud/token responses internally.
+          AZURE_CORE_OUTPUT: json
         with:
           app-name: ${{ vars.AZURE_WORKER_APP }}
           package: deployment/azure-worker.zip
       - name: Deploy same-origin Java and Angular application
         uses: Azure/webapps-deploy@v3
+        env:
+          AZURE_CORE_OUTPUT: json
         with:
           app-name: ${{ vars.AZURE_BACKEND_APP }}
           package: deployment/app.jar
