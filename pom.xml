@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.hs</groupId>
     <artifactId>hs-tesis</artifactId>
-    <version>0.2.4</version>
+    <version>0.2.5</version>
     <name>hs-tesis</name>
     <description>hs-tesis</description>
     <url/>
