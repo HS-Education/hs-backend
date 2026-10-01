@@ -1,6 +1,8 @@
 """Exercise bounded asset coordination and the protected tag-driven workflow contract."""
 import importlib.util
+import json
 from pathlib import Path
+import re
 import unittest
 from unittest.mock import patch
 import urllib.error
@@ -99,6 +101,51 @@ class TagDrivenCdTest(unittest.TestCase):
         self.assertLess(smoke.index('node scripts/assert-cloud-smoke-target.cjs'),
                         smoke.index('pnpm exec playwright test'))
         self.assertNotIn('repository_dispatch', source)
+
+    def deployment_output_contract(self):
+        source = (ROOT / '.github/workflows/azure-cd.yml').read_text(encoding='utf-8')
+        deploy = source.split('  deploy:', 1)[1].split('  browser-smoke:', 1)[0]
+        job_env, steps = deploy.split('    steps:', 1)
+        default = re.search(r'(?m)^      AZURE_CORE_OUTPUT: ([^\n]+)$', job_env)
+        self.assertIsNotNone(default, 'Preserve the silent default for CLI scripts')
+        actions = []
+        for step in re.split(r'(?m)^      - ', steps)[1:]:
+            if 'uses: Azure/webapps-deploy@v3' in step:
+                override = re.search(r'(?m)^          AZURE_CORE_OUTPUT: ([^\n]+)$', step)
+                actions.append((step, override.group(1).strip() if override else default.group(1).strip()))
+        return deploy, default.group(1).strip(), actions
+
+    def test_webapps_actions_receive_json_without_unsilencing_migration_scripts(self):
+        deploy, default, actions = self.deployment_output_contract()
+        self.assertEqual(default, 'none')
+        self.assertEqual(len(actions), 2, 'Both Python and Java deploy actions require JSON')
+        self.assertEqual(deploy.count('AZURE_CORE_OUTPUT:'), 3, 'Do not change output for other steps')
+        for step, effective_output in actions:
+            self.assertIn('\n        env:\n', step)
+            self.assertEqual(effective_output, 'json')
+            self.assertNotIn('publish-profile:', step)
+        self.assertIn('uses: azure/login@v3', deploy)
+
+    def test_silent_cli_output_reproduces_the_action_json_parsing_failure(self):
+        # Azure/webapps-deploy v3's authorizer parses az account/cloud responses
+        # without passing --output. Empty stdout is not missing credentials.
+        _, default, _ = self.deployment_output_contract()
+        self.assertEqual(default, 'none')
+        with self.assertRaises(json.JSONDecodeError):
+            json.loads('')
+
+    def test_effective_deploy_output_preserves_the_action_authentication_contract(self):
+        _, _, actions = self.deployment_output_contract()
+        fixtures = {
+            'account show': {'id': 'offline-students-subscription'},
+            'cloud show': {'suffixes': {}, 'endpoints': {'resourceManager': 'https://management.azure.com/'}},
+            'account get-access-token': {'accessToken': 'offline-test-token'},
+        }
+        self.assertEqual(len(actions), 2)
+        for _, effective_output in actions:
+            for command, expected in fixtures.items():
+                stdout = json.dumps(expected) if effective_output == 'json' else ''
+                self.assertEqual(json.loads(stdout), expected, command)
 
 
 if __name__ == '__main__':
