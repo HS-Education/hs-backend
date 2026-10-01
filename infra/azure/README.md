@@ -165,6 +165,14 @@ Si front es privado, `FRONTEND_RELEASE_READ_TOKEN` de lectura mínima de content
 
 ## Migraciones y compatibilidad de Azure CLI
 
+### Esperar la aplicación real después del despliegue
+
+En `v0.2.4`, el chequeo llegó mientras Azure servía una página HTML temporal con HTTP 200, incluso en `/actuator/health` y `/runtime-config.json`. Eso no demuestra disponibilidad de Spring Boot. Más tarde el mismo despliegue devolvió salud `UP`, configuración `/api/v1` y el login Angular; no fue necesario cambiar URLs, secretos ni deshacer migraciones.
+
+`Test-CloudHealth.ps1` comprueba las cuatro respuestas en un mismo ciclo: JSON de salud Java con `status: UP`, JSON del worker con `status: ok`, HTML del login con el root y scripts Angular, y JSON público con **solo** `apiBaseUrl: /api/v1`. Rechaza redirects, páginas temporales, estados no saludables, JSON inválido y configuración distinta. Acepta el media type JSON del Actuator y decodifica contenido de bytes. Usa 30 intentos como máximo y un presupuesto compartido de 300 segundos; los requests y pausas respetan el tiempo restante. No imprime cuerpos ni mensajes de excepciones HTTP.
+
+Las pruebas de `scripts/tests/test_cloud_readiness.py` ejecutan el código del script con HTTP y reloj simulados, sin llamar a Azure: arranque temporal, errores transitorios, contrato JSON/HTML, límites y destinos inválidos. El harness sustituye únicamente la construcción del cronómetro, comprobando que aparece una sola vez; el script de producción conserva `Stopwatch` y sus límites originales. Esto evita que la carga inicial de módulos PowerShell en el runner consuma el segundo de presupuesto ficticio del test antes de llegar al endpoint esperado. Los dos casos de límite se repiten tres veces sin pausas reales. CI y CD las descubren automáticamente. Un chequeo HTTP válido no sustituye el smoke de login/cookies ni la aceptación funcional de documentos, Sery y notificaciones. La corrección debe integrarse mediante PR y nuevo tag; no mover `v0.2.4` ni cambiar las aprobaciones del environment.
+
 ### Salida CLI y autenticación de las acciones de despliegue
 
 El run de `v0.2.3` superó OIDC y migraciones, pero `Azure/webapps-deploy@v3` falló al inicializar su autenticación: su authorizer interpreta como JSON la salida de `az account show` y `az cloud show` sin especificar `--output`. El valor global `AZURE_CORE_OUTPUT: none` suprime esa salida y provoca el mensaje genérico "No credentials found" aunque exista sesión. El [bundle de la acción](https://github.com/Azure/webapps-deploy/blob/v3/dist/index.js) contiene ese contrato; las advertencias de Node no son la causa de este fallo.
