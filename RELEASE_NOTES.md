@@ -1,3 +1,23 @@
+# Hotfix 0.2.6
+
+## Idempotent logout and onboarding persistence
+
+- Revoke refresh tokens with an explicit bulk delete and the same per-user database lock already used by sign-in. Repeated concurrent logout requests must not delete stale entity instances.
+- Add service regressions and a disposable PostgreSQL concurrency test covering four simultaneous logouts, three repeated rounds, repeated revocation and subsequent token replacement.
+- The previous derived entity deletion failed this new PostgreSQL regression with an optimistic locking/stale-row exception; the corrected implementation passed. This does not establish acceptance of the new version in Azure.
+- Create missing onboarding profiles when authenticated users complete their tutorials, serialize updates per user, retain independent flags and preserve the original completion timestamp on repeated completion.
+- Return HTTP 405 with the allowed methods for unsupported endpoint methods instead of converting those requests into internal-server errors.
+- Expose the existing explicit CORS policy as a reusable bean and test HTTPS same-origin requests behind Azure forwarded headers, preflight behavior and rejection of untrusted or missing origins. Do not weaken CSRF or cookie protections.
+
+## Protected hotfix integration
+
+- Prepare `hotfix/0.2.6` from `main`, paired with frontend 0.2.6. No migration or Azure resource changes are required for this correction.
+- Require current CI, CodeQL and independent approval before merging `hotfix/0.2.6` into `main`; synchronize `main` back into `develop` through a reviewed PR.
+- Publish matching new `v0.2.6` tags on the final reviewed main commits, frontend first. Preserve existing tags and protected deployment approvals.
+- Complete the strengthened concurrent-logout browser smoke after deployment and separately verify the user's reported Firefox behavior; local success is not cloud acceptance.
+
+---
+
 # Release 0.2.5
 
 ## Azure startup readiness recovery
