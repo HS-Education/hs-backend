@@ -39,6 +39,7 @@ public class OnboardingProfile extends AuditableAbstractAggregateRoot<Onboarding
     }
 
     public void markCompleted() {
+        if (this.completed) return;
         this.completed = true;
         this.completedAt = LocalDateTime.now();
     }
