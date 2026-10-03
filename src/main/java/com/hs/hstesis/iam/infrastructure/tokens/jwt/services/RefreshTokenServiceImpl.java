@@ -65,7 +65,10 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     @Override
     @Transactional
     public void deleteByUserId(Long userId) {
-        userRepository.findById(userId).ifPresent(refreshTokenRepository::deleteByUser);
+        // Coordinate logout with sign-in replacement using the same per-user
+        // lock. A bulk delete is idempotent if another logout already removed
+        // the token; a derived entity delete could fail with a stale row.
+        userRepository.findByIdForUpdate(userId).ifPresent(refreshTokenRepository::deleteByUser);
     }
 
     @Override
