@@ -1,3 +1,26 @@
+# Hotfix 0.2.7
+
+## Stateless CSRF lifecycle and safe access-denied responses
+
+- Retain CSRF validation, masked tokens, HttpOnly/Secure/Strict cookies and explicit trusted origins. JWT authentication on each request must not delete the CSRF cookie as if a new interactive login had occurred.
+- Use an explicit no-op CSRF session-authentication strategy with the existing stateless policy. Successful sign-in, token refresh and logout explicitly clear the CSRF cookie; ordinary authenticated reads and writes retain it.
+- Serialize access-denied responses with the configured Spring Boot Jackson 3 mapper. Return safe JSON HTTP 403 with `CSRF_TOKEN_MISSING`, `CSRF_TOKEN_INVALID` or `ACCESS_DENIED`, without leaking token values or attempting to rewrite a committed SSE response.
+- Add real-filter-chain regressions for consecutive POST/PUT/PATCH/DELETE operations, three calls through the real chat controller followed by logout, authentication-transition rotation, valid timestamp serialization and preserved origin/permission boundaries. Domain services are synthetic; these tests do not call OpenRouter.
+
+## Notification disconnect cleanup
+
+- Remove failed SSE emitters before completion, tolerate both broken pipes and already-ended servlet async contexts, and atomically update subscriber sets so healthy connections remain registered.
+- Add isolated regressions for connection, publish and keep-alive failures without suppressing unrelated application exceptions.
+
+## Review and deployment boundary
+
+- Prepare `hotfix/0.2.7` from current `main`, paired with frontend 0.2.7. No schema migration, Azure resource changes or production credential changes are required.
+- Publish the branch and open its PR into `main`; stop before merge, synchronization PRs, tag publication or deployment. Preserve independent review, required CI and environment approvals.
+- After review and merge, synchronize the reviewed change into `develop` and publish new matching `v0.2.7` tags, frontend first. Never move `v0.2.6`.
+- The frontend strengthens the deployed smoke with consecutive non-mutating method-rejection requests using one CSRF bootstrap. Full Azure acceptance still requires the new deployed version and a real Sery-enabled test account, repeated messages without reload, subsequent logout, notifications and the remaining module journeys.
+
+---
+
 # Hotfix 0.2.6
 
 ## Idempotent logout and onboarding persistence

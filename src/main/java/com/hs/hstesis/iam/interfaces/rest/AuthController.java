@@ -74,6 +74,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, cookiePolicy.clearCsrf().toString())
                 .body(responseResource);
     }
 
@@ -98,6 +99,7 @@ public class AuthController {
 
                         return ResponseEntity.ok()
                                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
+                                .header(HttpHeaders.SET_COOKIE, cookiePolicy.clearCsrf().toString())
                                 .body(new MessageResource("Token refreshed successfully"));
                     })
                     .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
@@ -142,6 +144,7 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, jwtCookie.toString())
                 .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, cookiePolicy.clearCsrf().toString())
                 .body(new MessageResource("Logged out successfully"));
     }
 
