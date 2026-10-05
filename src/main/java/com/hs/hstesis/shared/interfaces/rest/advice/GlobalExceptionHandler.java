@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.ErrorResponse;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -184,8 +187,28 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
     }
 
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<ApiErrorResponse> handleMissingRoute(Exception ex) {
+        // Do not expose or log user-controlled paths, query strings or resource locations.
+        logger.debug("Requested route or static resource was not found");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ApiErrorResponse(
+                HttpStatus.NOT_FOUND.value(), HttpStatus.NOT_FOUND.getReasonPhrase(),
+                "The requested resource was not found."
+        ));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleInternalError(Exception ex) {
+        // Spring MVC request errors (missing parameters, media negotiation, validation)
+        // already carry a 4xx status. Do not turn these into false server failures.
+        if (ex instanceof ErrorResponse error && error.getStatusCode().is4xxClientError()) {
+            var status = error.getStatusCode();
+            var knownStatus = HttpStatus.resolve(status.value());
+            logger.warn("Rejected HTTP request with status {}", status.value());
+            return new ResponseEntity<>(new ApiErrorResponse(status.value(),
+                    knownStatus == null ? "Client Error" : knownStatus.getReasonPhrase(),
+                    "The request could not be processed."), error.getHeaders(), status);
+        }
         logger.error("Internal Server Error: ", ex);
         var errorResponse = new ApiErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),

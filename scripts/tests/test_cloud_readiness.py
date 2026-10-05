@@ -12,7 +12,13 @@ $ErrorActionPreference='Stop'
 $global:scenario='SCENARIO'
 $global:attempt=0; $global:requests=0
 $global:testClock=[pscustomobject]@{Elapsed=[pscustomobject]@{TotalSeconds=0.0}}
-function Start-Sleep { throw 'Offline regression must not retry with real sleeps.' }
+function Start-Sleep {
+    param([int]$Milliseconds)
+    if ($global:scenario -ne 'slow-spa' -or $Milliseconds -lt 1 -or $Milliseconds -gt 10000) {
+        throw 'Offline regression must not retry with real sleeps.'
+    }
+    $global:testClock.Elapsed.TotalSeconds += $Milliseconds / 1000.0
+}
 function Invoke-WebRequest {
     param([string]$Uri,[int]$TimeoutSec,[int]$MaximumRedirection)
     if ($Uri -notmatch '^https://hs-(api|worker)-offline\.azurewebsites\.net/(actuator/health|livez|sign-in|runtime-config\.json)$') { throw 'Unexpected network target.' }
@@ -39,6 +45,8 @@ function Invoke-WebRequest {
         'down' { if ($Uri.EndsWith('/actuator/health')) { $body='{"status":"DOWN"}' } }
         'bad-worker' { if ($Uri.EndsWith('/livez')) { $body='{"status":"error"}' } }
         'default-spa' { if ($Uri.EndsWith('/sign-in')) { $body='<html>Azure landing page</html>' } }
+        'slow-spa' { if ($Uri.EndsWith('/sign-in') -and $global:attempt -le 30) { $body='<html>Azure landing page</html>' } }
+        'unsafe-media' { $type='PRIVATE_BODY_MARKER' }
         'invalid-json' { if ($Uri.EndsWith('/runtime-config.json')) { $body='{"apiBaseUrl":' } }
         'wrong-media' { if ($Uri.EndsWith('/runtime-config.json')) { $type='text/plain' } }
         'array-json' { if ($Uri.EndsWith('/runtime-config.json')) { $body='[{"apiBaseUrl":"/api/v1"}]' } }
@@ -60,7 +68,7 @@ if ([regex]::Matches($scriptSource,[regex]::Escape($clockStatement)).Count -ne 1
 }
 $subject=[scriptblock]::Create($scriptSource.Replace($clockStatement,'$clock = $global:testClock'))
 try {
-    & $subject -BackendUrl 'BACKEND_URL' -WorkerUrl 'https://hs-worker-offline.azurewebsites.net/' -MaxAttempts 2 -MaxWaitSeconds WAIT_SECONDS -RetryDelaySeconds 0
+    & $subject -BackendUrl 'BACKEND_URL' -WorkerUrl 'https://hs-worker-offline.azurewebsites.net/' -MaxAttempts ATTEMPT_LIMIT -MaxWaitSeconds WAIT_SECONDS -RetryDelaySeconds DELAY_SECONDS
 } catch { $caught=$_.Exception.Message }
 if ('EXPECTED_ERROR' -eq '') {
     if ($caught) { throw "Unexpected script failure: $caught" }
@@ -74,11 +82,12 @@ Write-Host 'Offline readiness lifecycle verified.'
 
 @unittest.skipUnless(shutil.which('pwsh'), 'PowerShell 7 is required')
 class CloudReadinessTest(unittest.TestCase):
-    def run_case(self, scenario, attempts, requests, error='', backend='https://hs-api-offline.azurewebsites.net/', wait=30):
+    def run_case(self, scenario, attempts, requests, error='', backend='https://hs-api-offline.azurewebsites.net/', wait=30, limit=2, delay=0):
         source = HARNESS
         for key, value in {'SCENARIO': scenario, 'SCRIPT_PATH': str(SCRIPT).replace("'", "''"),
                            'BACKEND_URL': backend, 'EXPECTED_ERROR': error, 'WAIT_SECONDS': str(wait),
-                           'EXPECTED_ATTEMPTS': str(attempts), 'EXPECTED_REQUESTS': str(requests)}.items():
+                           'EXPECTED_ATTEMPTS': str(attempts), 'EXPECTED_REQUESTS': str(requests),
+                           'ATTEMPT_LIMIT': str(limit), 'DELAY_SECONDS': str(delay)}.items():
             source = source.replace(key, value)
         result = subprocess.run(['pwsh', '-NoProfile', '-NonInteractive', '-Command', source],
                                 capture_output=True, text=True, timeout=30)
@@ -89,6 +98,16 @@ class CloudReadinessTest(unittest.TestCase):
 
     def test_ready_endpoints_pass_without_retry(self):
         self.run_case('ready', 1, 4)
+
+    def test_slow_spa_can_recover_after_the_old_attempt_limit(self):
+        self.run_case('slow-spa', 31, 94, wait=600, limit=60, delay=10)
+
+    def test_retry_diagnostics_are_safe_and_keep_payload_validation(self):
+        output = self.run_case('default-spa', 2, 6, 'Cloud readiness did not pass')
+        self.assertIn('HTTP 200; media text/html', output)
+        self.assertIn('HTTP 200 alone is not sufficient', SCRIPT.read_text())
+        output = self.run_case('unsafe-media', 2, 2, 'Cloud readiness did not pass')
+        self.assertIn('media unavailable', output)
 
     def test_initial_azure_html_retries_instead_of_accepting_http_200(self):
         self.run_case('boot-html', 2, 5)
