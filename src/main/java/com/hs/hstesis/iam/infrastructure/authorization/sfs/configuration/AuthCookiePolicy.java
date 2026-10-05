@@ -29,6 +29,11 @@ public class AuthCookiePolicy {
     public ResponseCookie refresh(String token) { return cookie("REFRESH_TOKEN", token, "/api/v1/auth/refresh-token", refreshSeconds); }
     public ResponseCookie clearAccess() { return cookie("JWT_TOKEN", "", "/", 0); }
     public ResponseCookie clearRefresh() { return cookie("REFRESH_TOKEN", "", "/api/v1/auth/refresh-token", 0); }
+    // Match CookieCsrfTokenRepository: rotate only at explicit authentication transitions.
+    public ResponseCookie clearCsrf() {
+        return ResponseCookie.from("XSRF-TOKEN", "").httpOnly(true).secure(secure).sameSite("Strict")
+                .path("/").maxAge(0).build();
+    }
 
     private ResponseCookie cookie(String name, String token, String path, long seconds) {
         return ResponseCookie.from(name, token).httpOnly(true).secure(secure).sameSite(sameSite)

@@ -19,6 +19,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.session.NullAuthenticatedSessionStrategy;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -99,7 +100,10 @@ public class WebSecurityConfiguration {
 
         http
                 // Keep the default XOR handler: bootstrap returns a masked token, not the raw cookie.
-                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository))
+                // The JWT filter authenticates every request. Authentication transitions
+                // in AuthController rotate the cookie explicitly, not this per-request strategy.
+                .csrf(csrf -> csrf.csrfTokenRepository(csrfTokenRepository)
+                        .sessionAuthenticationStrategy(new NullAuthenticatedSessionStrategy()))
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint(unauthorizedRequestHandler)
                         .accessDeniedHandler(customAccessDeniedHandler))
