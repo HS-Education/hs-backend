@@ -17,6 +17,12 @@ class AuthCookiePolicyTest {
         assertThat(policy.clearAccess().getMaxAge().toSeconds()).isZero();
         assertThat(policy.clearRefresh().getPath()).isEqualTo(policy.refresh("x").getPath());
         assertThat(policy.clearAccess().getSameSite()).isEqualTo("Strict");
+        assertThat(policy.clearCsrf().getName()).isEqualTo("XSRF-TOKEN");
+        assertThat(policy.clearCsrf().getPath()).isEqualTo("/");
+        assertThat(policy.clearCsrf().getMaxAge().toSeconds()).isZero();
+        assertThat(policy.clearCsrf().isHttpOnly()).isTrue();
+        assertThat(policy.clearCsrf().isSecure()).isTrue();
+        assertThat(policy.clearCsrf().getSameSite()).isEqualTo("Strict");
     }
     @Test void crossSiteCookiesCannotDisableTls() {
         assertThatThrownBy(() -> new AuthCookiePolicy(false, "None", 60, 7)).isInstanceOf(IllegalArgumentException.class);
