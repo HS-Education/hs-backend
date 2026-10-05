@@ -16,23 +16,21 @@ public class NotificationSseRegistry {
     private final Map<Long, CopyOnWriteArraySet<SseEmitter>> emittersByUser = new ConcurrentHashMap<>();
 
     public SseEmitter subscribe(Long userId) {
-        var emitter = new SseEmitter(0L);
-        var userEmitters = emittersByUser.computeIfAbsent(userId, ignored -> new CopyOnWriteArraySet<>());
-        userEmitters.add(emitter);
+        var emitter = newEmitter();
+        emittersByUser.compute(userId, (ignored, existing) -> {
+            var userEmitters = existing == null ? new CopyOnWriteArraySet<SseEmitter>() : existing;
+            userEmitters.add(emitter);
+            return userEmitters;
+        });
 
         Runnable remove = () -> remove(userId, emitter);
         emitter.onCompletion(remove);
         emitter.onTimeout(remove);
         emitter.onError(ignored -> remove.run());
 
-        try {
-            emitter.send(SseEmitter.event()
+        send(userId, emitter, SseEmitter.event()
                     .name("connected")
                     .data(Map.of("connected", true)));
-        } catch (IOException exception) {
-            remove.run();
-            emitter.completeWithError(exception);
-        }
 
         return emitter;
     }
@@ -42,15 +40,10 @@ public class NotificationSseRegistry {
         if (userEmitters == null) return;
 
         for (var emitter : userEmitters) {
-            try {
-                emitter.send(SseEmitter.event()
+            send(message.userId(), emitter, SseEmitter.event()
                         .id(String.valueOf(message.id()))
                         .name("notification")
                         .data(message));
-            } catch (IOException exception) {
-                emitter.completeWithError(exception);
-                remove(message.userId(), emitter);
-            }
         }
     }
 
@@ -58,20 +51,28 @@ public class NotificationSseRegistry {
     void sendKeepAlive() {
         emittersByUser.forEach((userId, userEmitters) -> {
             for (var emitter : userEmitters) {
-                try {
-                    emitter.send(SseEmitter.event().comment("keep-alive"));
-                } catch (IOException exception) {
-                    emitter.completeWithError(exception);
-                    remove(userId, emitter);
-                }
+                send(userId, emitter, SseEmitter.event().comment("keep-alive"));
             }
         });
     }
 
     private void remove(Long userId, SseEmitter emitter) {
-        var userEmitters = emittersByUser.get(userId);
-        if (userEmitters == null) return;
-        userEmitters.remove(emitter);
-        if (userEmitters.isEmpty()) emittersByUser.remove(userId, userEmitters);
+        emittersByUser.computeIfPresent(userId, (ignored, userEmitters) -> {
+            userEmitters.remove(emitter);
+            return userEmitters.isEmpty() ? null : userEmitters;
+        });
+    }
+
+    SseEmitter newEmitter() { return new SseEmitter(0L); }
+
+    private void send(Long userId, SseEmitter emitter, SseEmitter.SseEventBuilder event) {
+        try {
+            emitter.send(event);
+        } catch (IOException | IllegalStateException exception) {
+            // Remove first: a completed/failed servlet AsyncContext cannot be reused.
+            remove(userId, emitter);
+            try { emitter.completeWithError(exception); }
+            catch (IllegalStateException ignored) { /* The container already ended the connection. */ }
+        }
     }
 }
