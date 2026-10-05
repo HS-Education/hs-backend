@@ -1,3 +1,22 @@
+# Hotfix 0.2.8
+
+## Missing routes and safe HTTP error classification
+
+- Return safe JSON HTTP 404 for Spring MVC missing handlers and static resources instead of converting them into HTTP 500. Do not reflect request paths, query parameters, headers or exception details.
+- Keep Spring MVC client errors at their original 4xx status and preserve protocol headers, including HTTP 405 Allow. Actual application/framework server failures remain safe HTTP 500.
+- Exercise the real DispatcherServlet and static resource handler, then the real production security chain: unknown public routes and disabled Swagger return 404; unknown APIs require authentication before returning 404. Known Angular deep links retain the explicit SPA forwarding allowlist.
+- Keep Swagger disabled in Azure, the existing hostname, CSRF protections, trusted origins and HttpOnly/Secure/Strict cookies unchanged.
+
+## Bounded deployment startup and protected review
+
+- Allow up to 60 readiness attempts within a shared 600-second monotonic deadline, with ten-second retry delays and bounded request timeouts. This accommodates slow startup without accepting placeholder HTML, invalid health JSON or incorrect runtime configuration.
+- Report only HTTP status and sanitized media type on retry; never print bodies, sensitive headers or exception messages. Add offline virtual-clock regressions for recovery after attempt 30 and sanitized diagnostic output.
+- Preserve the existing immutable OIDC subject, current/legacy firewall CLI guards and per-action JSON output for Azure deployment authentication.
+- Prepare matching backend/frontend 0.2.8 branches and PRs into main. Independent review, CI and deployment approval remain required; do not merge, publish tags, provision resources or deploy in this preparation step.
+- Extend the frontend cloud smoke to check missing routes/assets and disabled Swagger, plus an authenticated missing API. Local tests do not establish acceptance of the new version in Azure.
+
+---
+
 # Hotfix 0.2.7
 
 ## Stateless CSRF lifecycle and safe access-denied responses
