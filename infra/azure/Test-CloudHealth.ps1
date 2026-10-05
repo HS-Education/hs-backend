@@ -1,9 +1,9 @@
 param(
     [Parameter(Mandatory)][string] $BackendUrl,
     [Parameter(Mandatory)][string] $WorkerUrl,
-    [ValidateRange(1, 30)][int] $MaxAttempts = 30,
-    [ValidateRange(1, 600)][int] $MaxWaitSeconds = 300,
-    [ValidateRange(0, 10)][int] $RetryDelaySeconds = 5
+    [ValidateRange(1, 60)][int] $MaxAttempts = 60,
+    [ValidateRange(1, 600)][int] $MaxWaitSeconds = 600,
+    [ValidateRange(0, 10)][int] $RetryDelaySeconds = 10
 )
 $ErrorActionPreference = 'Stop'
 foreach ($url in @($BackendUrl, $WorkerUrl)) {
@@ -48,10 +48,19 @@ for ($attempt = 1; $attempt -le $MaxAttempts -and $clock.Elapsed.TotalSeconds -l
         $lastPending = $check.Kind
         $remaining = $MaxWaitSeconds - $clock.Elapsed.TotalSeconds
         if ($remaining -le 0) { $ready = $false; break }
+        $lastStatus = 'unavailable'
+        $lastMediaType = 'unavailable'
         try {
             $response = Invoke-WebRequest -Uri $check.Uri -TimeoutSec ([int][Math]::Ceiling([Math]::Min(10, $remaining))) -MaximumRedirection 0
+            $lastStatus = [string][int]$response.StatusCode
+            # Only report a bounded, sanitized media type, never arbitrary response headers.
+            $type = (([string]$response.Headers['Content-Type']).Split(';')[0]).Trim().ToLowerInvariant()
+            if ($type -match '^[a-z0-9.+-]+/[a-z0-9.+-]+$' -and $type.Length -le 80) { $lastMediaType = $type }
             $valid = Test-CloudResponse -Response $response -Kind $check.Kind
-        } catch { $valid = $false }
+        } catch {
+            $valid = $false
+            if ($_.Exception.Response) { $lastStatus = [string][int]$_.Exception.Response.StatusCode }
+        }
         if (!$valid) { $ready = $false; break }
     }
     if ($ready -and $clock.Elapsed.TotalSeconds -lt $MaxWaitSeconds) {
@@ -59,7 +68,7 @@ for ($attempt = 1; $attempt -le $MaxAttempts -and $clock.Elapsed.TotalSeconds -l
         return
     }
     # Never log response bodies or exception messages: a proxy may return sensitive data.
-    Write-Host "Waiting for valid cloud readiness: $lastPending (attempt $attempt/$MaxAttempts)."
+    Write-Host "Waiting for valid cloud readiness: $lastPending (attempt $attempt/$MaxAttempts; HTTP $lastStatus; media $lastMediaType)."
     $remaining = $MaxWaitSeconds - $clock.Elapsed.TotalSeconds
     if ($attempt -lt $MaxAttempts -and $remaining -gt 0 -and $RetryDelaySeconds -gt 0) {
         Start-Sleep -Milliseconds ([int][Math]::Min($RetryDelaySeconds * 1000, $remaining * 1000))
