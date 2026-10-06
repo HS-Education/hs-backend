@@ -22,6 +22,8 @@ import java.time.LocalDate;
 @Setter
 public class GradingPeriod {
 
+    public static final int MINIMUM_DURATION_WEEKS = 2;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
