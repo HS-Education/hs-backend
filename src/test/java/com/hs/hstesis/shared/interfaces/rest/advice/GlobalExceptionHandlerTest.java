@@ -10,6 +10,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 class GlobalExceptionHandlerTest {
+    @Test void missingHandlerDoesNotExposeTheRequestOrHeaders() {
+        var exception = mock(org.springframework.web.servlet.NoHandlerFoundException.class);
+        var response = new GlobalExceptionHandler().handleMissingRoute(exception);
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+        assertThat(response.getBody().message()).isEqualTo("The requested resource was not found.");
+        verifyNoInteractions(exception);
+    }
+
+    @Test void frameworkServerErrorsAreNotHiddenAsClientErrors() {
+        var exception = new org.springframework.web.ErrorResponseException(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR);
+        var response = new GlobalExceptionHandler().handleInternalError(exception);
+        assertThat(response.getStatusCode().value()).isEqualTo(500);
+        assertThat(response.getBody().message()).doesNotContain("PRIVATE_VARIABLE");
+    }
+
     @Test
     void openingPostOnlyEndpointsWithGetReturns405AndAllowInsteadOf500() {
         var exception = new HttpRequestMethodNotSupportedException("GET", java.util.List.of("POST"));

@@ -61,7 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebAppConfiguration
 @TestPropertySource(properties = {
         "app.auth.allowed-origins=https://thesis.example.azurewebsites.net",
-        "app.auth.cookie-secure=true", "app.auth.origin-check-enabled=true"
+        "app.auth.cookie-secure=true", "app.auth.origin-check-enabled=true", "app.frontend.enabled=true"
 })
 class StatelessCsrfLifecycleTest {
     private static final String ORIGIN = "https://thesis.example.azurewebsites.net";
@@ -149,8 +149,12 @@ class StatelessCsrfLifecycleTest {
     }
 
     @Test void permissionDenialIsNotMisclassifiedAsCsrf() throws Exception {
+        // Controller/method denial is handled by the real MVC advice; filter-level
+        // CSRF failures use CustomAccessDeniedHandler's explicit retry codes.
         mvc.perform(withCsrf(post("/api/v1/test/forbidden"), bootstrap()))
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.code").value("ACCESS_DENIED"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.status").value(403))
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .doesNotContain("CSRF_TOKEN_MISSING", "CSRF_TOKEN_INVALID"))
                 .andExpect(jsonPath("$.timestamp").isString());
     }
 
@@ -222,6 +226,17 @@ class StatelessCsrfLifecycleTest {
         user.setTemporaryPassword(false);
         return user;
     }
+    @Test void missingPublicRoutesAre404ButUnknownApisStillRequireAuthentication() throws Exception {
+        for (String path : new String[]{"/homeaaa", "/swagger-ui.html", "/v3/api-docs", "/missing.js"}) {
+            mvc.perform(get(path)).andExpect(status().isNotFound()).andExpect(jsonPath("status").value(404));
+        }
+        mvc.perform(get("/api/v1/diagnostic-missing")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/diagnostic-missing").cookie(JWT))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("status").value(404))
+                .andExpect(forwardedUrl(null));
+        mvc.perform(get("/sign-in")).andExpect(status().isOk()).andExpect(forwardedUrl("/index.html"));
+    }
+
     private record Token(Cookie cookie, String token) { }
 
     @RestController static class Writes {
@@ -233,7 +248,16 @@ class StatelessCsrfLifecycleTest {
     @org.springframework.context.annotation.Configuration
     @EnableWebSecurity @EnableWebMvc
     @Import({WebSecurityConfiguration.class, AuthController.class, CsrfController.class, ChatController.class, Writes.class})
-    static class Configuration {
+    static class Configuration implements org.springframework.web.servlet.config.annotation.WebMvcConfigurer {
+        @Bean com.hs.hstesis.shared.interfaces.rest.FrontendController frontend() {
+            return new com.hs.hstesis.shared.interfaces.rest.FrontendController();
+        }
+        @Bean com.hs.hstesis.shared.interfaces.rest.advice.GlobalExceptionHandler errors() {
+            return new com.hs.hstesis.shared.interfaces.rest.advice.GlobalExceptionHandler();
+        }
+        @Override public void addResourceHandlers(org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
+            registry.addResourceHandler("/**").addResourceLocations("classpath:/route-test-fixtures/");
+        }
         @Bean(name = "defaultUserDetailsService") UserDetailsService users() {
             return username -> new UserDetailsImpl(7L, "Synthetic User", username, "synthetic-hash", true,
                     List.of(new SimpleGrantedAuthority("REPOSITORY_READ")), List.of("COORDINATOR"));
