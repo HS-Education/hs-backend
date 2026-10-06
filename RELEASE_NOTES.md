@@ -1,3 +1,14 @@
+# Hotfix 0.2.9
+
+## Two-week grading periods
+
+- Accept grading-period updates lasting at least two complete weeks (14 days between start and end), instead of three. Share the minimum between validation and its error message.
+- Keep current-year, past-date, started/finished-period, chronological-sequence and overlap protections unchanged. No schema migration or cloud configuration change is required.
+- Add boundary, HTTP and disposable PostgreSQL regressions for accepted two-week updates and rejected shorter periods; verify persisted dates survive reload and rejected updates leave them unchanged. Retain previously valid longer periods.
+- Pair with frontend 0.2.9 for the matching-tag deployment contract. Independent review, CI and deployment approval remain required.
+
+---
+
 # Hotfix 0.2.8
 
 ## Missing routes and safe HTTP error classification
