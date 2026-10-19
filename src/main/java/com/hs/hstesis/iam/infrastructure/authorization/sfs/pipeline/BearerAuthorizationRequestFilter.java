@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -38,7 +39,11 @@ public class BearerAuthorizationRequestFilter extends OncePerRequestFilter {
             if (token != null && tokenService.validateToken(token)) {
                 String username = tokenService.getUsernameFromToken(token);
                 var userDetails = userDetailsService.loadUserByUsername(username);
-                SecurityContextHolder.getContext().setAuthentication(UsernamePasswordAuthenticationTokenBuilder.build(userDetails, request));
+                var context = SecurityContextHolder.createEmptyContext();
+                context.setAuthentication(UsernamePasswordAuthenticationTokenBuilder.build(userDetails, request));
+                SecurityContextHolder.setContext(context);
+                // Preserve authentication across ASYNC/ERROR dispatches of this request only.
+                new RequestAttributeSecurityContextRepository().saveContext(context, request, response);
             } else {
                 LOGGER.info("Token is not valid");
             }
