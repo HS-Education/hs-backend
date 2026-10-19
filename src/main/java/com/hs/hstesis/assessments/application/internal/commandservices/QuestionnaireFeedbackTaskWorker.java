@@ -32,7 +32,7 @@ public class QuestionnaireFeedbackTaskWorker {
         this.externalAiService = externalAiService;
     }
 
-    @Scheduled(fixedDelayString = "${ai.background-tasks.poll-interval-ms:5000}")
+    @Scheduled(fixedDelayString = "${ai.background-tasks.feedback-poll-interval-ms:1000}")
     @Transactional
     public void processNextFeedbackTask() {
         var task = tasks.lockNextReadyTask(AiBackgroundTaskType.QUESTIONNAIRE_FEEDBACK.name(), LocalDateTime.now())
