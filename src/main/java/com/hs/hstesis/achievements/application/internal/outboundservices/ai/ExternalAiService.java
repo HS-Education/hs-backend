@@ -50,7 +50,7 @@ public class ExternalAiService {
             "Genera un insight analítico breve y útil (máximo 3 párrafos) dirigido a un %s. " +
             "Destaca los puntos fuertes y los temas donde se necesita refuerzo.\n" +
             "INSTRUCCIONES ESPECÍFICAS SEGÚN TU AUDIENCIA:\n%s\n\n" +
-            "Además, tienes a tu disposición la siguiente lista de material de apoyo de la asignatura. PARA TODOS LOS TEMAS donde el rendimiento sea bajo, DEBES OBLIGATORIAMENTE adjuntar al menos un material de apoyo relacionado para que el usuario pueda repasarlo. Relaciona el material guiándote por la similitud entre el nombre del tema y el título del documento, o recomienda documentos generales si aplican. Utiliza ESTE FORMATO EXACTO al finalizar la recomendación: **Fuente:** [Nombre del Documento] **Enlace de descarga:** [URL]. IMPORTANTE: NO cites ni menciones 'Contexto 1' ni 'Contexto 2' como fuentes.\n\nDatos de Rendimiento:\n%s\n\n%s",
+            "Puedes mencionar por nombre los temas que requieren repaso, pero NO incluyas enlaces, URLs, citas de fuentes, 'Fuente:', 'Enlace de descarga:' ni referencias a documentos del repositorio. Tampoco cites 'Contexto 1' ni 'Contexto 2'.\n\nDatos de Rendimiento:\n%s\n\n%s",
             targetAudience, audienceInstructions, performanceJsonData, docsContext
         );
 
