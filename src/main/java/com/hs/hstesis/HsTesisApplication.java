@@ -13,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class HsTesisApplication {
 
     public static void main(String[] args) {
+        java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("America/Lima"));
         String profiles = System.getenv().getOrDefault("SPRING_PROFILES_ACTIVE", "local");
         if (!java.util.Arrays.asList(profiles.split(",")).contains("azure")) {
             Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();

@@ -35,7 +35,7 @@ public class QuestionnaireController {
     }
 
     @PostMapping("/generate")
-    @PreAuthorize("hasRole('TEACHER') and !hasRole('COORDINATOR')")
+    @PreAuthorize("hasRole('TEACHER')")
     public ResponseEntity<Void> generateQuestionnaire(@RequestBody GenerateQuestionnaireCommand command) {
         var userDetails = (com.hs.hstesis.iam.infrastructure.authorization.sfs.model.UserDetailsImpl)
                 org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal();

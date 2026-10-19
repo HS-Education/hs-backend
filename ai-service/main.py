@@ -453,8 +453,11 @@ def generate_quiz(payload: GenerateQuizRequest) -> GenerateQuizResponse:
             if payload.num_questions == 15 else ""
         )
         system_prompt = UNTRUSTED_DATA_RULE + (
-            "You are an expert teacher. Generate a multiple choice quiz in Spanish based only on facts explicitly stated in the provided context.\n"
-            "Do not invent numbers, calculations, definitions or claims absent from that context.\n"
+            "You are an expert teacher. Generate a multiple choice quiz in Spanish guided by the concepts, formulas, methods and exercise types found in the provided context.\n"
+            "Do not copy exercises verbatim: write NEW original questions that use the material as a guide (you may vary numbers, scenarios and wording), keeping them mathematically and factually correct.\n"
+            "Every question MUST be fully self-contained: include all data, tables, scenario and conditions needed to answer it inside its own 'text'.\n"
+            "NEVER refer to anything outside the question itself, such as 'según el ejercicio N', 'en el mismo ejercicio', 'el problema anterior', 'el gráfico/tabla mostrado', 'el texto', or 'el documento'. Questions must not depend on each other.\n"
+            "Do not state claims that contradict the context.\n"
             f"Generate exactly {payload.num_questions} questions; neither more nor fewer.\n"
             f"Is remedial (needs extra explanation focus): {payload.is_remedial}\n"
             "Return ONLY a JSON object with a list of questions under the key 'questions'.\n"

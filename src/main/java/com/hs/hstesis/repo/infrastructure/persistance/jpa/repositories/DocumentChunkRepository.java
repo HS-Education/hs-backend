@@ -59,9 +59,9 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, Lo
             @Param("vector") String vector,
             @Param("limit") int limit);
 
-    @Query("SELECT c FROM DocumentChunk c WHERE c.document.topicId = :topicId AND c.document.status = :status")
+    @Query("SELECT c FROM DocumentChunk c WHERE c.document.topicId = :topicId AND c.document.status = :status ORDER BY c.document.id ASC, c.id ASC")
     List<DocumentChunk> findAllByDocumentTopicIdAndDocumentStatus(Long topicId, DocumentStatus status);
 
-    @Query("SELECT c FROM DocumentChunk c WHERE c.document.topicId IN :topicIds AND c.document.status = :status")
+    @Query("SELECT c FROM DocumentChunk c WHERE c.document.topicId IN :topicIds AND c.document.status = :status ORDER BY c.document.id ASC, c.id ASC")
     List<DocumentChunk> findAllByDocumentTopicIdInAndDocumentStatus(List<Long> topicIds, DocumentStatus status);
 }

@@ -43,6 +43,7 @@ public class QuestionnaireSubmission {
     private LocalDateTime submittedAt;
 
     @OneToMany(mappedBy = "submission", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("id ASC")
     private java.util.List<QuestionnaireSubmissionAnswer> answers = new java.util.ArrayList<>();
 
     public QuestionnaireSubmission(QuestionnaireInstance questionnaireInstance, Long studentId, Integer score) {
