@@ -65,9 +65,12 @@ public class Course {
             throw new TopicAlreadyExistsException(name);
         }
 
-        int nextIndex = (int) topics.stream()
+        var occupiedIndexes = topics.stream()
                 .filter(t -> t.getGradingPeriod().getId().equals(gradingPeriod.getId()))
-                .count() + 1;
+                .map(Topic::getOrderIndex)
+                .collect(Collectors.toSet());
+        int nextIndex = 1;
+        while (occupiedIndexes.contains(nextIndex)) nextIndex++;
         Topic topic = new Topic(this, gradingPeriod, name.toUpperCase().trim(), nextIndex);
         topics.add(topic);
     }

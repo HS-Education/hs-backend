@@ -98,7 +98,8 @@ public class ChatServiceImpl implements ChatService {
                 System.nanoTime() - preparationStartedAt);
         var vectorString = formatVectorForPg(embedResponse.embedding());
         long retrievalStartedAt = System.nanoTime();
-        List<String> contextTexts = accessibleContext(userId, session.getCourseId(), vectorString);
+        var sourceChunks = accessibleContext(userId, session.getCourseId(), vectorString);
+        List<String> contextTexts = contextTexts(sourceChunks);
         long retrievalMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
                 System.nanoTime() - retrievalStartedAt);
         LOGGER.info("Sery chat context prepared (sessionId={}, sourceChunks={}, embeddingMs={}, retrievalMs={})",
@@ -113,7 +114,7 @@ public class ChatServiceImpl implements ChatService {
 
         var generateResponse = aiServiceClient.generateAnswer(req);
 
-        var msg = new ChatMessage(session, "assistant", generateResponse.answer());
+        var msg = new ChatMessage(session, "assistant", ChatReferenceFormatter.format(generateResponse.answer(), sourceChunks));
         return chatMessageRepository.save(msg);
     }
 
@@ -138,7 +139,8 @@ public class ChatServiceImpl implements ChatService {
                 System.nanoTime() - preparationStartedAt);
         var vectorString = formatVectorForPg(embedResponse.embedding());
         long retrievalStartedAt = System.nanoTime();
-        List<String> contextTexts = accessibleContext(userId, session.getCourseId(), vectorString);
+        var sourceChunks = accessibleContext(userId, session.getCourseId(), vectorString);
+        List<String> contextTexts = contextTexts(sourceChunks);
         long retrievalMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
                 System.nanoTime() - retrievalStartedAt);
         LOGGER.info("Sery chat context prepared (sessionId={}, sourceChunks={}, embeddingMs={}, retrievalMs={})",
@@ -151,6 +153,7 @@ public class ChatServiceImpl implements ChatService {
 
         var req = new GenerateRequest(messagesForAi, contextTexts, 1024, 0.2f, true);
         StringBuilder fullAnswer = new StringBuilder();
+        var references = new ChatReferenceFormatter(sourceChunks);
         var assistantMsg = chatMessageRepository.saveAndFlush(new ChatMessage(session, "assistant", ""));
         var responsePersisted = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -166,11 +169,15 @@ public class ChatServiceImpl implements ChatService {
 
         aiServiceClient.generateAnswerStream(req,
                 token -> {
-                    fullAnswer.append(token);
-                    onToken.accept(token);
+                    String text = references.accept(token);
+                    fullAnswer.append(text);
+                    if (!text.isEmpty()) onToken.accept(text);
                 },
                 () -> {
                     try {
+                        String tail = references.finish();
+                        fullAnswer.append(tail);
+                        if (!tail.isEmpty()) onToken.accept(tail);
                         persistResponse.run();
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -206,10 +213,13 @@ public class ChatServiceImpl implements ChatService {
         throw new AuthorizationDeniedException("Course is not accessible");
     }
 
-    private List<String> accessibleContext(Long userId, Long selectedCourseId, String vector) {
+    private List<DocumentChunkWithMetadata> accessibleContext(Long userId, Long selectedCourseId, String vector) {
         List<Long> courseIds = selectedCourseId != null && selectedCourseId != 0L
                 ? List.of(selectedCourseId)
-                : externalLearningService.getEnrolledCourseIds(userId);
+                : java.util.stream.Stream.concat(
+                        externalLearningService.getEnrolledCourseIds(userId).stream(),
+                        externalLearningService.getCoordinatedCourseIds(userId).stream())
+                        .distinct().toList();
         return courseIds.stream()
                 .distinct()
                 .flatMap(courseId -> {
@@ -228,7 +238,11 @@ public class ChatServiceImpl implements ChatService {
                 .sorted(Comparator.comparing(DocumentChunkWithMetadata::getSimilarity,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .limit(10)
-                .map(c -> String.format(
+                .toList();
+    }
+
+    private List<String> contextTexts(List<DocumentChunkWithMetadata> chunks) {
+        return chunks.stream().map(c -> String.format(
                         "Fuente: %s\nEnlace de descarga: /api/v1/courses/%d/documents/%d/download\nContenido: %s",
                         c.getTitle(), c.getCourseId(), c.getDocumentId(), c.getContent()))
                 .toList();

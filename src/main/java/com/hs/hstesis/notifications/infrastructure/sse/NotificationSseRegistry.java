@@ -68,10 +68,12 @@ public class NotificationSseRegistry {
     private void send(Long userId, SseEmitter emitter, SseEmitter.SseEventBuilder event) {
         try {
             emitter.send(event);
-        } catch (IOException | IllegalStateException exception) {
-            // Remove first: a completed/failed servlet AsyncContext cannot be reused.
+        } catch (IOException exception) {
+            // The servlet container dispatches I/O failures; do not dispatch completion twice.
             remove(userId, emitter);
-            try { emitter.completeWithError(exception); }
+        } catch (IllegalStateException exception) {
+            remove(userId, emitter);
+            try { emitter.complete(); }
             catch (IllegalStateException ignored) { /* The container already ended the connection. */ }
         }
     }

@@ -14,11 +14,12 @@ class NotificationSseRegistryTest {
         var emitter = mock(SseEmitter.class);
         doReturn(emitter).when(registry).newEmitter();
         doThrow(new IllegalStateException("Synthetic closed context")).when(emitter).send(any(SseEmitter.SseEventBuilder.class));
-        doThrow(new IllegalStateException("Already complete")).when(emitter).completeWithError(any());
+        doThrow(new IllegalStateException("Already complete")).when(emitter).complete();
         assertThatCode(() -> registry.subscribe(7L)).doesNotThrowAnyException();
         registry.sendKeepAlive();
         registry.publish(message());
         verify(emitter, times(1)).send(any(SseEmitter.SseEventBuilder.class));
+        verify(emitter, never()).completeWithError(any());
     }
 
     @Test void disconnectedKeepAliveDoesNotPreventHealthySubscribersReceivingEvents() throws Exception {
@@ -46,6 +47,26 @@ class NotificationSseRegistryTest {
         registry.sendKeepAlive();
         registry.publish(message());
         verify(emitter, times(2)).send(any(SseEmitter.SseEventBuilder.class));
+        verify(emitter, never()).complete();
+        verify(emitter, never()).completeWithError(any());
+    }
+
+    @Test void disconnectedHeartbeatLeavesOtherSubscribersActiveWithoutRedispatchingIoFailure() throws Exception {
+        var registry = spy(new NotificationSseRegistry());
+        var disconnected = mock(SseEmitter.class);
+        var healthy = mock(SseEmitter.class);
+        doReturn(disconnected, healthy).when(registry).newEmitter();
+        registry.subscribe(7L);
+        registry.subscribe(7L);
+        doThrow(new IOException("Synthetic aborted connection"))
+                .when(disconnected).send(any(SseEmitter.SseEventBuilder.class));
+        registry.sendKeepAlive();
+        registry.sendKeepAlive();
+        registry.publish(message());
+        verify(disconnected, times(2)).send(any(SseEmitter.SseEventBuilder.class));
+        verify(disconnected, never()).complete();
+        verify(disconnected, never()).completeWithError(any());
+        verify(healthy, times(4)).send(any(SseEmitter.SseEventBuilder.class));
     }
 
     private NotificationRealtimeMessage message() {

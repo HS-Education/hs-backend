@@ -152,7 +152,7 @@ public class AchievementController {
 
     @Operation(summary = "Generate insight for classroom")
     @PostMapping("/classrooms/{classroomId}/insights")
-    @PreAuthorize("hasRole('TEACHER') and !hasRole('COORDINATOR')")
+    @PreAuthorize("hasRole('TEACHER')")
     public ResponseEntity<?> generateClassroomInsight(@PathVariable Long classroomId,
             org.springframework.security.core.Authentication authentication) {
         try {
