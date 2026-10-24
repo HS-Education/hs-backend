@@ -44,6 +44,10 @@ public class ExternalLearningService {
                 ));
     }
 
+    public List<Long> getCoordinatedCourseIds(Long userId) {
+        return learningContextFacade.getCoordinatedCourseIds(userId);
+    }
+
     public List<Long> getEnrolledCourseIds(Long userId) {
         return learningContextFacade.getEnrolledCourseIds(userId);
     }

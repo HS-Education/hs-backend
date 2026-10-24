@@ -45,19 +45,6 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
         this.iamContextFacade = iamContextFacade;
     }
 
-    private String buildDocumentsContext(List<Long> courseIds) {
-        if (courseIds == null || courseIds.isEmpty()) return "";
-        List<DocumentBasicData> documents = externalRepoService.getDocumentsByCourseIds(courseIds);
-        if (documents.isEmpty()) return "";
-        
-        StringBuilder sb = new StringBuilder();
-        sb.append("DOCUMENTOS DISPONIBLES EN EL REPOSITORIO:\n");
-        for (DocumentBasicData doc : documents) {
-            String url = String.format("/api/v1/courses/%d/documents/%d/download", doc.courseId(), doc.id());
-            sb.append("- ").append(doc.title()).append(" (URL: ").append(url).append(")\n");
-        }
-        return sb.toString();
-    }
 
     @Override
     public AchievementInsight handle(GenerateStudentInsightCommand command) {
@@ -73,9 +60,10 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
             String jsonData = objectMapper.writeValueAsString(new com.hs.hstesis.achievements.domain.model.valueobjects.StudentInsightData(
                     studentCode, performance.averageScore(), performance.topics()));
             List<Long> courseIds = externalLearningService.getEnrolledCourseIds(command.studentId());
-            String docsContext = buildDocumentsContext(courseIds);
+            List<DocumentBasicData> documents = courseIds.isEmpty() ? List.of()
+                    : externalRepoService.getDocumentsByCourseIds(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "estudiante", studentCode, docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "estudiante", studentCode, documents);
             
             var insight = new AchievementInsight("STUDENT", command.studentId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -96,9 +84,10 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
             String jsonData = objectMapper.writeValueAsString(performanceOpt.get());
             List<Long> courseIds = externalLearningService.getCourseIdByClassroomId(command.classroomId())
                     .map(List::of).orElse(List.of());
-            String docsContext = buildDocumentsContext(courseIds);
+            List<DocumentBasicData> documents = courseIds.isEmpty() ? List.of()
+                    : externalRepoService.getDocumentsByCourseIds(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "profesor", null, docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "profesor", null, documents);
             
             var insight = new AchievementInsight("CLASSROOM", command.classroomId(), insightText);
             return achievementInsightRepository.save(insight);
@@ -118,9 +107,10 @@ public class AchievementCommandServiceImpl implements AchievementCommandService 
         try {
             String jsonData = objectMapper.writeValueAsString(performanceOpt.get());
             List<Long> courseIds = externalLearningService.getCoursesByAreaId(command.areaId());
-            String docsContext = buildDocumentsContext(courseIds);
+            List<DocumentBasicData> documents = courseIds.isEmpty() ? List.of()
+                    : externalRepoService.getDocumentsByCourseIds(courseIds);
             
-            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico", null, docsContext);
+            String insightText = externalAiService.generateInsight(jsonData, "coordinador académico", null, documents);
             
             var insight = new AchievementInsight("AREA", command.areaId(), insightText);
             return achievementInsightRepository.save(insight);

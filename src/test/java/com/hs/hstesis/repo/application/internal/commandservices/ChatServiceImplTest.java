@@ -129,4 +129,115 @@ class ChatServiceImplTest {
         assertThat(request.getValue().maxTokens()).isEqualTo(1024);
         assertThat(error.get()).isInstanceOf(java.io.IOException.class);
     }
+    @Test
+    void normalAndStreamedAnswersUseRegisteredTitleAndPersistTheSameReference() {
+        when(sessions.findById(1L)).thenReturn(Optional.of(new ChatSession(10L, 7L)));
+        when(learning.doesCoordinatorOwnCourse(7L, 10L)).thenReturn(true);
+        when(ai.embedQuery("question")).thenReturn(new EmbedQueryResponse("fake", 2, List.of(1f, 0f)));
+        when(messages.save(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messages.saveAndFlush(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        var source = mock(DocumentChunkWithMetadata.class);
+        when(source.getTitle()).thenReturn("30pg");
+        when(source.getCourseId()).thenReturn(10L);
+        when(source.getDocumentId()).thenReturn(30L);
+        when(source.getContent()).thenReturn("Academic explanation.");
+        when(chunks.findSimilarChunksByCourseIdsIn(eq(List.of(10L)), anyString(), eq(10)))
+                .thenReturn(List.of(source));
+        String raw = "Academic explanation.\nFuente: invented name Enlace de descarga: "
+                + "/api/v1/courses/10/documents/30/download";
+        when(ai.generateAnswer(any())).thenReturn(new GenerateResponse("fake", raw));
+        String expected = service.sendMessage(1L, 7L, "question").getContent();
+        assertThat(expected).contains("Fuente: 30pg Enlace de descarga:").doesNotContain("invented name");
+        doAnswer(invocation -> {
+            Consumer<String> token = invocation.getArgument(1);
+            Runnable complete = invocation.getArgument(2);
+            token.accept(raw.substring(0, 25));
+            token.accept(raw.substring(25));
+            complete.run();
+            return null;
+        }).when(ai).generateAnswerStream(any(), any(), any(), any());
+        var emitted = new StringBuilder();
+        Runnable complete = mock(Runnable.class);
+        Consumer<Throwable> error = mock(Consumer.class);
+        service.streamMessageResponse(1L, 7L, "question", emitted::append, complete, error);
+        assertThat(emitted.toString()).isEqualTo(expected);
+        var saved = org.mockito.ArgumentCaptor.forClass(ChatMessage.class);
+        verify(messages, times(4)).saveAndFlush(saved.capture());
+        assertThat(saved.getAllValues().get(3).getContent()).isEqualTo(expected);
+        verify(complete).run();
+        verifyNoInteractions(error);
+    }
+
+    private void prepareGlobalSession() {
+        when(sessions.findById(1L)).thenReturn(Optional.of(new ChatSession(7L)));
+        when(ai.embedQuery("question")).thenReturn(new EmbedQueryResponse("fake", 2, List.of(1f, 0f)));
+        when(messages.save(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(messages.saveAndFlush(any(ChatMessage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ai.generateAnswer(any())).thenReturn(new GenerateResponse("fake", "Answer."));
+    }
+
+    private DocumentChunkWithMetadata globalSource(long courseId, String content) {
+        var source = mock(DocumentChunkWithMetadata.class);
+        when(source.getCourseId()).thenReturn(courseId);
+        when(source.getDocumentId()).thenReturn(courseId * 10);
+        when(source.getTitle()).thenReturn("Course " + courseId);
+        when(source.getContent()).thenReturn(content);
+        when(source.getSimilarity()).thenReturn(0.9);
+        return source;
+    }
+
+    @Test void globalChatIncludesCoordinatedCoursesWithoutAnyClassroomEnrollment() {
+        prepareGlobalSession();
+        when(learning.getEnrolledCourseIds(7L)).thenReturn(List.of());
+        when(learning.getCoordinatedCourseIds(7L)).thenReturn(List.of(10L, 20L));
+        for (long course : List.of(10L, 20L)) {
+            when(learning.doesCoordinatorOwnCourse(7L, course)).thenReturn(true);
+            var source = globalSource(course, "Accessible area material " + course);
+            when(chunks.findSimilarChunksByCourseIdsIn(eq(List.of(course)), anyString(), eq(10))).thenReturn(List.of(source));
+        }
+        service.sendMessage(1L, 7L, "question");
+        var request = org.mockito.ArgumentCaptor.forClass(GenerateRequest.class);
+        verify(ai).generateAnswer(request.capture());
+        assertThat(String.join(" ", request.getValue().contextChunks()))
+                .contains("Accessible area material 10", "Accessible area material 20");
+        verify(chunks, never()).findSimilarChunksByAccessibleTarget(anyLong(), anyString(), anyString(), anyString(), anyInt());
+        verify(chunks, never()).findSimilarChunksByCourseIdsIn(eq(List.of(99L)), anyString(), anyInt());
+    }
+
+    @Test void globalChatDeduplicatesCoursesAndKeepsGradeFilterForTeacherCoursesOutsideCoordinatedArea() {
+        prepareGlobalSession();
+        when(learning.getEnrolledCourseIds(7L)).thenReturn(List.of(10L, 20L));
+        when(learning.getCoordinatedCourseIds(7L)).thenReturn(List.of(10L, 10L));
+        when(learning.doesCoordinatorOwnCourse(7L, 10L)).thenReturn(true);
+        when(learning.getUserEnrollmentContextByCourse(7L, 20L)).thenReturn(Optional.of(
+                new UserEnrollmentContext(EducationLevel.SECONDARY, GradeLevel.SECOND, 20L)));
+        service.sendMessage(1L, 7L, "question");
+        verify(chunks, times(1)).findSimilarChunksByCourseIdsIn(eq(List.of(10L)), anyString(), eq(10));
+        verify(chunks).findSimilarChunksByAccessibleTarget(eq(20L), eq("SECONDARY"), eq("SECOND"), anyString(), eq(10));
+        verify(chunks, never()).findSimilarChunksByCourseIdsIn(eq(List.of(20L)), anyString(), anyInt());
+    }
+
+    @Test void globalStreamingAlsoReceivesCoordinatedCourseMaterial() {
+        prepareGlobalSession();
+        when(learning.getCoordinatedCourseIds(7L)).thenReturn(List.of(10L));
+        when(learning.doesCoordinatorOwnCourse(7L, 10L)).thenReturn(true);
+        var source = globalSource(10L, "Area material for streaming");
+        when(chunks.findSimilarChunksByCourseIdsIn(eq(List.of(10L)), anyString(), eq(10))).thenReturn(List.of(source));
+        service.streamMessageResponse(1L, 7L, "question", ignored -> {}, () -> {}, ignored -> {});
+        var request = org.mockito.ArgumentCaptor.forClass(GenerateRequest.class);
+        verify(ai).generateAnswerStream(request.capture(), any(), any(), any());
+        assertThat(String.join(" ", request.getValue().contextChunks())).contains("Area material for streaming");
+    }
+
+    @Test void selectedCourseDoesNotExpandToAllCoordinatedCourses() {
+        when(sessions.findById(1L)).thenReturn(Optional.of(new ChatSession(10L, 7L)));
+        when(learning.doesCoordinatorOwnCourse(7L, 10L)).thenReturn(true);
+        when(ai.embedQuery("question")).thenReturn(new EmbedQueryResponse("fake", 2, List.of(1f, 0f)));
+        when(ai.generateAnswer(any())).thenReturn(new GenerateResponse("fake", "Answer."));
+        service.sendMessage(1L, 7L, "question");
+        verify(learning, never()).getCoordinatedCourseIds(anyLong());
+        verify(learning, never()).getEnrolledCourseIds(anyLong());
+        verify(chunks).findSimilarChunksByCourseIdsIn(eq(List.of(10L)), anyString(), eq(10));
+    }
+
 }
