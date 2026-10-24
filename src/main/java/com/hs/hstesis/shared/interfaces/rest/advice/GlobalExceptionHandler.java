@@ -20,6 +20,9 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -195,6 +198,20 @@ public class GlobalExceptionHandler {
                 HttpStatus.NOT_FOUND.value(), HttpStatus.NOT_FOUND.getReasonPhrase(),
                 "The requested resource was not found."
         ));
+    }
+
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleDisconnectedResponse(AsyncRequestNotUsableException ignored, HttpServletResponse response) {
+        // Declaring the servlet response marks this exception handled without writing a body.
+        // The connection is already unusable; neither JSON nor an SSE error can be sent.
+        logger.debug("Asynchronous client connection is no longer usable");
+    }
+
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public void handleAsyncTimeout(AsyncRequestTimeoutException ignored, HttpServletResponse response) {
+        // Never serialize ApiErrorResponse into a response already negotiated as SSE.
+        if (!response.isCommitted()) response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        logger.debug("Asynchronous request timed out");
     }
 
     @ExceptionHandler(Exception.class)
