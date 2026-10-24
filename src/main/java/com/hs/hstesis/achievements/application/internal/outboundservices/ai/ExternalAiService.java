@@ -10,6 +10,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
+import com.hs.hstesis.repo.interfaces.acl.dto.DocumentBasicData;
+import com.hs.hstesis.shared.infrastructure.ai.DocumentReferenceFormatter;
 
 @Service("achievementsExternalAiService")
 public class ExternalAiService {
@@ -27,7 +31,7 @@ public class ExternalAiService {
         this.restTemplate = restTemplate;
     }
 
-    public String generateInsight(String performanceJsonData, String targetAudience, String studentCode, String docsContext) {
+    public String generateInsight(String performanceJsonData, String targetAudience, String studentCode, List<DocumentBasicData> documents) {
         String url = aiServiceUrl + "/generate";
 
         HttpHeaders headers = new HttpHeaders();
@@ -45,17 +49,41 @@ public class ExternalAiService {
             audienceInstructions = "Tus recomendaciones deben ser de observación directiva. Si el aula tiene buen rendimiento (promedio mayor o igual a 16 u 80%), felicita indicando algo como 'Dale un ojo a esta aula que está TOP, excelente trabajo' y aclara que no requieren intervención con cuestionarios. Si el aula o áreas están mal, advierte diciendo 'Ponle el ojo a esta aula/área, están bajos' y sugiere estrategias paulatinas de mejora.";
         }
 
+        boolean studentAudience = "estudiante".equals(targetAudience);
+        var titles = new LinkedHashMap<String, String>();
+        if (studentAudience) {
+            for (var document : documents) {
+                if (document.id() != null && document.courseId() != null) {
+                    titles.putIfAbsent("/courses/" + document.courseId() + "/documents/"
+                            + document.id() + "/download", document.title());
+                }
+            }
+        }
+        String docsContext = titles.entrySet().stream()
+                .map(entry -> "Fuente: " + entry.getValue() + " Enlace de descarga: /api/v1" + entry.getKey())
+                .collect(Collectors.joining("\n"));
+        String referenceInstructions = studentAudience
+                ? "Cuando un tema necesite refuerzo, recomienda material pertinente de la lista proporcionada, si existe. "
+                    + "Al final cita una sola vez cada documento utilizado: Fuente: <título registrado exacto> "
+                    + "Enlace de descarga: <enlace proporcionado>. Copia exactamente título y enlace. "
+                    + "No inventes documentos ni reemplaces títulos por encabezados o fragmentos del contenido. "
+                    + "No incluyas bloques Fuente con citas textuales ni fuentes dentro de tablas."
+                : "Puedes mencionar los temas que requieren repaso, pero NO incluyas enlaces, URLs, "
+                    + "citas de fuentes, 'Fuente:', 'Enlace de descarga:' ni referencias al repositorio.";
+
         String prompt = String.format(
             "Eres un analista académico experto llamado Sery. A continuación te proveo los datos de rendimiento en formato JSON. " +
             "Genera un insight analítico breve y útil (máximo 3 párrafos) dirigido a un %s. " +
             "Destaca los puntos fuertes y los temas donde se necesita refuerzo.\n" +
             "INSTRUCCIONES ESPECÍFICAS SEGÚN TU AUDIENCIA:\n%s\n\n" +
-            "Puedes mencionar por nombre los temas que requieren repaso, pero NO incluyas enlaces, URLs, citas de fuentes, 'Fuente:', 'Enlace de descarga:' ni referencias a documentos del repositorio. Tampoco cites 'Contexto 1' ni 'Contexto 2'.\n\nDatos de Rendimiento:\n%s\n\n%s",
-            targetAudience, audienceInstructions, performanceJsonData, docsContext
+            "%s No cites 'Contexto 1' ni 'Contexto 2'.\n\nDatos de Rendimiento:\n%s\n\n%s",
+            targetAudience, audienceInstructions, referenceInstructions, performanceJsonData, docsContext
         );
 
         GenerateRequest requestBody = new GenerateRequest(
-                List.of("DATOS DE RENDIMIENTO A ANALIZAR: " + performanceJsonData, docsContext), // add data to context chunks
+                studentAudience && !docsContext.isBlank()
+                        ? List.of("DATOS DE RENDIMIENTO A ANALIZAR: " + performanceJsonData, docsContext)
+                        : List.of("DATOS DE RENDIMIENTO A ANALIZAR: " + performanceJsonData),
                 List.of(new Message("user", prompt)),
                 1000,
                 0.7
@@ -68,7 +96,7 @@ public class ExternalAiService {
             if (response == null || response.answer() == null || response.answer().isBlank()) {
                 throw new IllegalStateException("AI returned an empty insight.");
             }
-            return response.answer();
+            return DocumentReferenceFormatter.format(response.answer(), titles);
         } catch (Exception e) {
             log.warn("AI insight generation request failed.");
             throw new IllegalStateException("Error de conexión con el motor de Inteligencia Artificial.");
