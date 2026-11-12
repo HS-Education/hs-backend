@@ -59,8 +59,8 @@ class GradingPeriodCommandServiceImplTest {
 
     @AfterEach void restoreClock() { dates.close(); }
 
-    @ParameterizedTest @ValueSource(ints = {14, 15, 20, 21, 28})
-    void acceptsTwoCompleteWeeksAndPreviouslyValidLongerPeriods(int days) {
+    @ParameterizedTest @ValueSource(ints = {7, 8, 13, 14, 15, 20, 21, 28})
+    void acceptsOneCompleteWeekAndPreviouslyValidLongerPeriods(int days) {
         var end = start.plusDays(days);
         assertThat(service.handle(command(start, end))).contains(period);
         assertThat(period.getStartDate()).isEqualTo(start);
@@ -68,11 +68,11 @@ class GradingPeriodCommandServiceImplTest {
         verify(periods).save(period);
     }
 
-    @ParameterizedTest @ValueSource(ints = {0, 1, 7, 13})
+    @ParameterizedTest @ValueSource(ints = {0, 1, 6})
     void rejectsShorterPeriodsWithoutMutatingOrSaving(int days) {
         assertThatThrownBy(() -> service.handle(command(start, start.plusDays(days))))
                 .isInstanceOf(GradingPeriodDurationTooShortException.class)
-                .hasMessage("A grading period must last at least 2 weeks. Current duration: '%d' weeks.", days / 7);
+                .hasMessage("A grading period must last at least 1 week. Current duration: '%d' weeks.", days / 7);
         assertThat(period.getStartDate()).isNull();
         assertThat(period.getEndDate()).isNull();
         verify(periods, never()).save(any());
@@ -159,13 +159,22 @@ class GradingPeriodCommandServiceImplTest {
         verify(periods).save(period);
     }
 
-    @Test void actualUpdateEndpointReturns400AndTheNewMinimumForThirteenDays() throws Exception {
+    @Test void actualUpdateEndpointAcceptsExactlySevenDays() throws Exception {
         mvc.perform(put("/api/v1/academic-years/1/grading-periods/2")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"startDate\":\"2030-04-01\",\"endDate\":\"2030-04-14\"}"))
+                        .content("{\"startDate\":\"2030-04-01\",\"endDate\":\"2030-04-08\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.endDate").value("2030-04-08"));
+        verify(periods).save(period);
+    }
+
+    @Test void actualUpdateEndpointReturns400AndTheNewMinimumForSixDays() throws Exception {
+        mvc.perform(put("/api/v1/academic-years/1/grading-periods/2")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"startDate\":\"2030-04-01\",\"endDate\":\"2030-04-07\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        "A grading period must last at least 2 weeks. Current duration: '1' weeks."));
+                        "A grading period must last at least 1 week. Current duration: '0' weeks."));
         verify(periods, never()).save(any());
     }
 
